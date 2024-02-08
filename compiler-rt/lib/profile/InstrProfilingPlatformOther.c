@@ -10,9 +10,10 @@
     !defined(__Fuchsia__) && !(defined(__sun__) && defined(__svr4__)) &&       \
     !defined(__NetBSD__) && !defined(_WIN32) && !defined(_AIX)
 
+#if !(COMPILER_RT_BAREMETAL_BUILD)
 #include <stdlib.h>
 #include <stdio.h>
-
+#endif // !(COMPILER_RT_BAREMETAL_BUILD)
 #include "InstrProfiling.h"
 #include "InstrProfilingInternal.h"
 

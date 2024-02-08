@@ -10,7 +10,11 @@
 #define PROFILE_INSTRPROFILING_H_
 
 #include "InstrProfilingPort.h"
+#if (COMPILER_RT_BAREMETAL_BUILD)
+#include "InstrProfilingBaremetal.h"
+#else
 #include <stdio.h>
+#endif
 
 #define INSTR_PROF_VISIBILITY COMPILER_RT_VISIBILITY
 #include "profile/InstrProfData.inc"

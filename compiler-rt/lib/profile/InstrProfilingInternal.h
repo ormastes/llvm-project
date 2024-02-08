@@ -9,7 +9,11 @@
 #ifndef PROFILE_INSTRPROFILING_INTERNALH_
 #define PROFILE_INSTRPROFILING_INTERNALH_
 
+#if (COMPILER_RT_BAREMETAL_BUILD)
+#include "InstrProfilingBaremetal.h"
+#else
 #include <stddef.h>
+#endif
 
 #include "InstrProfiling.h"
 

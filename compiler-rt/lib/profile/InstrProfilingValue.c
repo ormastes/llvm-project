@@ -5,13 +5,15 @@
 |* SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 |*
 \*===----------------------------------------------------------------------===*/
-
+#if defined(COMPILER_RT_BAREMETAL_BUILD)
+#include "InstrProfilingBaremetal.h"
+#else
 #include <assert.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#endif
 #include "InstrProfiling.h"
 #include "InstrProfilingInternal.h"
 #include "InstrProfilingUtil.h"
@@ -21,6 +23,7 @@
 #define INSTR_PROF_VALUE_PROF_MEMOP_API
 #include "profile/InstrProfData.inc"
 
+#if !(COMPILER_RT_BAREMETAL_BUILD)
 static int hasStaticCounters = 1;
 static int OutOfNodesWarnings = 0;
 static int hasNonDefaultValsPerSite = 0;
@@ -256,7 +259,7 @@ __llvm_profile_instrument_memop(uint64_t TargetValue, void *Data,
   uint64_t RepValue = InstrProfGetRangeRepValue(TargetValue);
   __llvm_profile_instrument_target(RepValue, Data, CounterIndex);
 }
-
+#endif //#if (COMPILER_RT_BAREMETAL_BUILD)
 /*
  * A wrapper struct that represents value profile runtime data.
  * Like InstrProfRecord class which is used by profiling host tools,

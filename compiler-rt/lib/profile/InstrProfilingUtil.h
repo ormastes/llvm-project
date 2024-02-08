@@ -9,9 +9,13 @@
 #ifndef PROFILE_INSTRPROFILINGUTIL_H
 #define PROFILE_INSTRPROFILINGUTIL_H
 
+#if (COMPILER_RT_BAREMETAL_BUILD)
+#include "InstrProfilingBaremetal.h"
+#else
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdio.h>
+#endif
 
 /*! \brief Create a directory tree. */
 void __llvm_profile_recursive_mkdir(char *Pathname);

@@ -48,6 +48,33 @@ int main() {
 
 add_compiler_rt_component(profile)
 
+if(COMPILER_RT_BAREMETAL_BUILD)
+set(PROFILE_SOURCES
+  InstrProfilingBaremetal.c
+  #GCDAProfiling.c
+  InstrProfiling.c
+  InstrProfilingInternal.c
+  InstrProfilingValue.c
+  InstrProfilingBuffer.c
+  #InstrProfilingFile.c
+  #InstrProfilingMerge.c
+  #InstrProfilingMergeFile.c
+  #InstrProfilingNameVar.c
+  InstrProfilingVersionVar.c
+  InstrProfilingWriter.c
+  InstrProfilingPlatformOther.c
+  #InstrProfilingRuntime.cpp
+  #InstrProfilingUtil.c
+  )
+set(PROFILE_HEADERS
+  InstrProfilingBaremetal.h
+  InstrProfiling.h
+  InstrProfilingInternal.h
+  InstrProfilingPort.h
+  InstrProfilingUtil.h
+  WindowsMMap.h
+  )
+else()
 set(PROFILE_SOURCES
   GCDAProfiling.c
   InstrProfiling.c
@@ -77,6 +104,7 @@ set(PROFILE_HEADERS
   InstrProfilingUtil.h
   WindowsMMap.h
   )
+endif()
 
 if(WIN32)
   list(APPEND PROFILE_SOURCES
@@ -91,6 +119,19 @@ if(FUCHSIA OR UNIX)
  set(EXTRA_FLAGS
      -fPIC
      -Wno-pedantic)
+endif()
+
+if(COMPILER_RT_BAREMETAL_BUILD)
+ set(EXTRA_FLAGS
+     ${EXTRA_FLAGS}
+     -DCOMPILER_RT_BAREMETAL_BUILD=1)
+endif()
+
+
+if(COMPILER_RT_BAREMETAL_BUILD AND COMPILER_RT_BUILD_BUILTINS)
+ set(EXTRA_FLAGS
+     ${EXTRA_FLAGS}
+     -DCOMPILER_RT_BUILD_BUILTINS=1)
 endif()
 
 if(COMPILER_RT_TARGET_HAS_ATOMICS)

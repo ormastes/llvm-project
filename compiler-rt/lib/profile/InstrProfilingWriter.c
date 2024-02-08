@@ -13,7 +13,11 @@
 /* For _alloca */
 #include <malloc.h>
 #endif
+#if (COMPILER_RT_BAREMETAL_BUILD)
+#include "InstrProfilingBaremetal.h"
+#else
 #include <string.h>
+#endif
 
 #include "InstrProfiling.h"
 #include "InstrProfilingInternal.h"

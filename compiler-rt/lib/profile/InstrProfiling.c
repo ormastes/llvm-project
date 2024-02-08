@@ -10,9 +10,11 @@
 // with freestanding compilation. See `darwin_add_builtin_libraries`.
 
 #include <limits.h>
+#if !(COMPILER_RT_BAREMETAL_BUILD)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#endif
 
 #include "InstrProfiling.h"
 #include "InstrProfilingInternal.h"

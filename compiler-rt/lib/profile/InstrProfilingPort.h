@@ -116,9 +116,17 @@ static inline size_t getpagesize() {
   GetNativeSystemInfo(&S);
   return S.dwPageSize;
 }
+#elif (COMPILER_RT_BAREMETAL_BUILD)
+#include "InstrProfilingBaremetal.h"
 #else /* defined(_WIN32) */
 #include <unistd.h>
 #endif /* defined(_WIN32) */
+
+#if (COMPILER_RT_BAREMETAL_BUILD)
+#define PROF_ERR(Format, ...)    while(1);
+#define PROF_WARN(Format, ...)
+#define PROF_NOTE(Format, ...)         
+#else
 
 #define PROF_ERR(Format, ...)                                                  \
   fprintf(stderr, "LLVM Profile Error: " Format, __VA_ARGS__);
@@ -129,6 +137,7 @@ static inline size_t getpagesize() {
 #define PROF_NOTE(Format, ...)                                                 \
   fprintf(stderr, "LLVM Profile Note: " Format, __VA_ARGS__);
 
+#endif
 #ifndef MAP_FILE
 #define MAP_FILE 0
 #endif
@@ -142,6 +151,8 @@ static inline size_t getpagesize() {
 #include <inttypes.h>
 #include <sys/types.h>
 
+#elif (COMPILER_RT_BAREMETAL_BUILD)
+// do not include InstrProfilingBaremetal.h which already incuded
 #else /* defined(__FreeBSD__) */
 
 #include <inttypes.h>

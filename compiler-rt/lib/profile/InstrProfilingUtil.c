@@ -11,6 +11,8 @@
 #include <process.h>
 #include <windows.h>
 #include "WindowsMMap.h"
+#elif (COMPILER_RT_BAREMETAL_BUILD)
+#include "InstrProfilingBaremetal.h"
 #else
 #include <errno.h>
 #include <fcntl.h>
@@ -21,12 +23,14 @@
 #include <unistd.h>
 #endif
 
+#if !(COMPILER_RT_BAREMETAL_BUILD)
 #ifdef COMPILER_RT_HAS_UNAME
 #include <sys/utsname.h>
 #endif
 
 #include <stdlib.h>
 #include <string.h>
+#endif
 
 #if defined(__linux__)
 #include <signal.h>
