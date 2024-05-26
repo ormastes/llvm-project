@@ -1,4 +1,4 @@
-add_llvm_component_group(MSP430)
+add_llvm_component_group(TOYMSP430)
 
 set(LLVM_TARGET_DEFINITIONS MSP430.td)
 
