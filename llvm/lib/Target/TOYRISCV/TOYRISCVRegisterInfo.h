@@ -20,7 +20,7 @@ public:
   uint32_t const *getCallPreservedMask(MachineFunction const &MF,
                                        CallingConv::ID) const override;
   BitVector getReservedRegs(MachineFunction const &MF) const override;
-  void eliminateFrameIndex(MachineBasicBlock::iterator II, int SPAdj,
+  bool eliminateFrameIndex(MachineBasicBlock::iterator II, int SPAdj,
                            unsigned FIOperandNum,
                            RegScavenger *RS = nullptr) const override;
   Register getFrameRegister(MachineFunction const &MF) const override;

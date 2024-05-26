@@ -18,9 +18,10 @@ class TOYRISCVMCCodeEmitter : public MCCodeEmitter {
 public:
   TOYRISCVMCCodeEmitter(MCInstrInfo const &MCII, MCContext &Ctx, bool IsLittle);
 
-  void encodeInstruction(MCInst const &MI, raw_ostream &OS,
-                         SmallVectorImpl<MCFixup> &Fixups,
-                         MCSubtargetInfo const &STI) const override;
+  void encodeInstruction(const MCInst &MI,
+                                           SmallVectorImpl<char> &CB,
+                                           SmallVectorImpl<MCFixup> &Fixups,
+                                           const MCSubtargetInfo &STI) const;
 };
 
 } // namespace llvm

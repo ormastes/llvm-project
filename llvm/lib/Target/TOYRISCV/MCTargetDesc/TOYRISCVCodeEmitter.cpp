@@ -12,9 +12,10 @@ TOYRISCVMCCodeEmitter::TOYRISCVMCCodeEmitter(MCInstrInfo const &MCII,
                                              MCContext &Ctx, bool IsLittle)
     : MCII(MCII), Ctx(Ctx), IsLittleEndian(IsLittle) {}
 
-void TOYRISCVMCCodeEmitter::encodeInstruction(
-    MCInst const &MI, raw_ostream &OS, SmallVectorImpl<MCFixup> &Fixups,
-    MCSubtargetInfo const &STI) const {
+void TOYRISCVMCCodeEmitter::encodeInstruction(const MCInst &MI,
+                                           SmallVectorImpl<char> &CB,
+                                           SmallVectorImpl<MCFixup> &Fixups,
+                                           const MCSubtargetInfo &STI) const {
   // TODO
 }
 

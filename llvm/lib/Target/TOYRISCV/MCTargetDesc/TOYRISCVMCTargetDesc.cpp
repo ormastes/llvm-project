@@ -80,9 +80,9 @@ createTOYRISCVAsmTargetStreamer(MCStreamer &S, formatted_raw_ostream &OS,
   return new TOYRISCVTargetAsmStreamer(S, OS);
 }
 
-static MCCodeEmitter *createTOYRISCVMCCodeEmitter(MCInstrInfo const &MCII,
-                                                  MCRegisterInfo const &MRI,
-                                                  MCContext &Ctx) {
+
+static MCCodeEmitter *createTOYRISCVMCCodeEmitter(const MCInstrInfo &MCII,
+                                              MCContext &Ctx) {
   return new TOYRISCVMCCodeEmitter(MCII, Ctx, true);
 }
 

@@ -31,8 +31,8 @@ void TOYRISCVInstPrinter::printInst(MCInst const *MI, uint64_t Address,
   printAnnotation(O, Annot);
 }
 
-void TOYRISCVInstPrinter::printRegName(raw_ostream &OS, unsigned RegNo) const {
-  OS << StringRef(getRegisterName(RegNo)).lower();
+void TOYRISCVInstPrinter::printRegName(raw_ostream &O, MCRegister Reg) const {
+  markup(O, Markup::Register) << getRegisterName(Reg);
 }
 
 void TOYRISCVInstPrinter::printOperand(MCInst const *MI, unsigned OpNo,

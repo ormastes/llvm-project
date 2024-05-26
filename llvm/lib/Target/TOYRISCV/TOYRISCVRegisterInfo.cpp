@@ -42,10 +42,11 @@ TOYRISCVRegisterInfo::getReservedRegs(MachineFunction const &MF) const {
   return Reserved;
 }
 
-void TOYRISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
+bool TOYRISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                                int SPAdj, unsigned FIOperandNum,
                                                RegScavenger *RS) const {
   // TODO
+  return true;
 }
 
 Register
