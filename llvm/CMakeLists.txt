@@ -458,7 +458,7 @@ set(LLVM_ALL_TARGETS
   LoongArch
   Mips
   MSP430
-  TOYMSP430
+  TOYMSP43_
   NVPTX
   PowerPC
   RISCV

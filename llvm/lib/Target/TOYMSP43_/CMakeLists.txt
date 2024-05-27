@@ -1,4 +1,4 @@
-add_llvm_component_group(TOYMSP430)
+add_llvm_component_group(TOYMSP43_)
 
 set(LLVM_TARGET_DEFINITIONS MSP430.td)
 
@@ -14,7 +14,7 @@ tablegen(LLVM MSP430GenSubtargetInfo.inc -gen-subtarget)
 
 add_public_tablegen_target(MSP430CommonTableGen)
 
-add_llvm_target(MSP430CodeGen
+add_llvm_target(TOYMSP43_CodeGen
   MSP430BranchSelector.cpp
   MSP430ISelDAGToDAG.cpp
   MSP430ISelLowering.cpp
@@ -33,14 +33,14 @@ add_llvm_target(MSP430CodeGen
   CodeGenTypes
   Core
   MC
-  MSP430Desc
-  MSP430Info
+  TOYMSP43_Desc
+  TOYMSP43_Info
   SelectionDAG
   Support
   Target
 
   ADD_TO_COMPONENT
-  MSP430
+  TOYMSP43_
   )
 
 add_subdirectory(MCTargetDesc)

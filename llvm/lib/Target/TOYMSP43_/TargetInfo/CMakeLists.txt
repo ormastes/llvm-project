@@ -1,4 +1,4 @@
-add_llvm_component_library(LLVMMSP430Info
+add_llvm_component_library(LLVMTOYMSP43_Info
   MSP430TargetInfo.cpp
 
   LINK_COMPONENTS
@@ -6,5 +6,5 @@ add_llvm_component_library(LLVMMSP430Info
   Support
 
   ADD_TO_COMPONENT
-  MSP430
+  TOYMSP43_
   )

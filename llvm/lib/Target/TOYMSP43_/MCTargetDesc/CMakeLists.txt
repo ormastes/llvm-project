@@ -1,4 +1,4 @@
-add_llvm_component_library(LLVMMSP430Desc
+add_llvm_component_library(LLVMTOYMSP43_Desc
   MSP430AsmBackend.cpp
   MSP430ELFObjectWriter.cpp
   MSP430ELFStreamer.cpp
@@ -9,9 +9,9 @@ add_llvm_component_library(LLVMMSP430Desc
 
   LINK_COMPONENTS
   MC
-  MSP430Info
+  TOYMSP43_Info
   Support
 
   ADD_TO_COMPONENT
-  MSP430
+  TOYMSP43_
   )

@@ -80,7 +80,7 @@ static MCInstPrinter *createMSP430MCInstPrinter(const Triple &T,
   return nullptr;
 }
 
-extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMSP430TargetMC() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeTOYMSP43_TargetMC() {
   Target &T = getTheMSP430Target();
 
   TargetRegistry::RegisterMCAsmInfo(T, createMSP430MCAsmInfo);
