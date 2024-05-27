@@ -40,8 +40,8 @@ class Proc<string Name, list<SubtargetFeature> Features>
  : Processor<Name, NoItineraries, Features>;
 
 def : Proc<"generic",         []>;
-def : Proc<"msp430",          []>;
-def : Proc<"msp430x",         [FeatureX]>;
+def : Proc<"toymsp43_",          []>;
+def : Proc<"toymsp43_x",         [FeatureX]>;
 
 //===----------------------------------------------------------------------===//
 // Register File Description

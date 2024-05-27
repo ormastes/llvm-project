@@ -28,7 +28,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MathExtras.h"
 
-#define DEBUG_TYPE "msp430-asm-parser"
+#define DEBUG_TYPE "toymsp43_-asm-parser"
 
 using namespace llvm;
 

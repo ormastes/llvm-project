@@ -95,7 +95,7 @@ void MSP430AsmPrinter::printOperand(const MachineInstr *MI, int OpNum,
     // If the global address expression is a part of displacement field with a
     // register base, we should not emit any prefix symbol here, e.g.
     //   mov.w glb(r1), r2
-    // Otherwise (!) msp430-as will silently miscompile the output :(
+    // Otherwise (!) toymsp43_-as will silently miscompile the output :(
     if (!Modifier || strcmp(Modifier, "nohash"))
       O << '#';
     PrintSymbolOperand(MO, O);
@@ -163,7 +163,7 @@ void MSP430AsmPrinter::EmitInterruptVectorSection(MachineFunction &ISR) {
   MCSection *Cur = OutStreamer->getCurrentSectionOnly();
   const auto *F = &ISR.getFunction();
   if (F->getCallingConv() != CallingConv::MSP430_INTR) {
-    report_fatal_error("Functions with 'interrupt' attribute must have msp430_intrcc CC");
+    report_fatal_error("Functions with 'interrupt' attribute must have toymsp43__intrcc CC");
   }
   StringRef IVIdx = F->getFnAttribute("interrupt").getValueAsString();
   MCSection *IV = OutStreamer->getContext().getELFSection(

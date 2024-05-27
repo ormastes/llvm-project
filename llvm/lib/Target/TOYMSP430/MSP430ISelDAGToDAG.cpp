@@ -29,7 +29,7 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
-#define DEBUG_TYPE "msp430-isel"
+#define DEBUG_TYPE "toymsp43_-isel"
 #define PASS_NAME "MSP430 DAG->DAG Pattern Instruction Selection"
 
 namespace {

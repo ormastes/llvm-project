@@ -24,7 +24,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "msp430-disassembler"
+#define DEBUG_TYPE "toymsp43_-disassembler"
 
 typedef MCDisassembler::DecodeStatus DecodeStatus;
 

@@ -34,10 +34,10 @@
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
-#define DEBUG_TYPE "msp430-lower"
+#define DEBUG_TYPE "toymsp43_-lower"
 
 static cl::opt<bool>MSP430NoLegalImmediate(
-  "msp430-no-legal-immediate", cl::Hidden,
+  "toymsp43_-no-legal-immediate", cl::Hidden,
   cl::desc("Enable non legal immediates (for testing purposes only)"),
   cl::init(false));
 
@@ -365,7 +365,7 @@ bool MSP430TargetLowering::shouldAvoidTransformToShift(EVT VT,
 }
 
 // Implemented to verify test case assertions in
-// tests/codegen/msp430/shift-amount-threshold-b.ll
+// tests/codegen/toymsp43_/shift-amount-threshold-b.ll
 bool MSP430TargetLowering::isLegalICmpImmediate(int64_t Immed) const {
   if (MSP430NoLegalImmediate)
     return Immed >= -32 && Immed < 32;

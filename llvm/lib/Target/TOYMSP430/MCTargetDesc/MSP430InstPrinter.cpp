@@ -81,7 +81,7 @@ void MSP430InstPrinter::printSrcMemOperand(const MCInst *MI, unsigned OpNo,
   //   mov.w &foo, r1
   // vs
   //   mov.w glb(r1), r2
-  // Otherwise (!) msp430-as will silently miscompile the output :(
+  // Otherwise (!) toymsp43_-as will silently miscompile the output :(
   if (Base.getReg() == MSP430::SR)
     O << '&';
 

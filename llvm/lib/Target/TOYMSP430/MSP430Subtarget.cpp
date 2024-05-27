@@ -16,7 +16,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "msp430-subtarget"
+#define DEBUG_TYPE "toymsp43_-subtarget"
 
 static cl::opt<MSP430Subtarget::HWMultEnum>
 HWMultModeOption("mhwmult", cl::Hidden,
@@ -45,7 +45,7 @@ MSP430Subtarget::initializeSubtargetDependencies(StringRef CPU, StringRef FS) {
 
   StringRef CPUName = CPU;
   if (CPUName.empty())
-    CPUName = "msp430";
+    CPUName = "toymsp43_";
 
   ParseSubtargetFeatures(CPUName, /*TuneCPU*/ CPUName, FS);
 
