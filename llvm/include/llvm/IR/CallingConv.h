@@ -261,6 +261,11 @@ namespace CallingConv {
     /// except that the first parameter is mapped to x9.
     ARM64EC_Thunk_Native = 109,
 
+    /// Used for TISC interrupt routines.
+    TISC_INTR = 110,
+
+    TISC_BUILTIN =111,
+
     /// The highest possible ID. Must be some 2^k - 1.
     MaxID = 1023
   };

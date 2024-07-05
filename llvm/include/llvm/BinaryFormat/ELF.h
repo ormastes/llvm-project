@@ -320,6 +320,7 @@ enum {
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
   EM_LOONGARCH = 258,     // LoongArch
+  EM_TISC = 259,       // TISC
 };
 
 // Object file classes.
@@ -939,6 +940,40 @@ enum {
 #include "ELFRelocs/VE.def"
 };
 
+
+// TISC specific e_flags
+enum : unsigned {
+  EF_TISC_MACH_TISCx11 = 11,
+  EF_TISC_MACH_TISCx11x1 = 110,
+  EF_TISC_MACH_TISCx12 = 12,
+  EF_TISC_MACH_TISCx13 = 13,
+  EF_TISC_MACH_TISCx14 = 14,
+  EF_TISC_MACH_TISCx15 = 15,
+  EF_TISC_MACH_TISCx16 = 16,
+  EF_TISC_MACH_TISCx20 = 20,
+  EF_TISC_MACH_TISCx22 = 22,
+  EF_TISC_MACH_TISCx23 = 23,
+  EF_TISC_MACH_TISCx24 = 24,
+  EF_TISC_MACH_TISCx26 = 26,
+  EF_TISC_MACH_TISCx31 = 31,
+  EF_TISC_MACH_TISCx32 = 32,
+  EF_TISC_MACH_TISCx33 = 33,
+  EF_TISC_MACH_TISCx41 = 41,
+  EF_TISC_MACH_TISCx42 = 42,
+  EF_TISC_MACH_TISCx43 = 43,
+  EF_TISC_MACH_TISCx44 = 44,
+  EF_TISC_MACH_TISCX = 45,
+  EF_TISC_MACH_TISCx46 = 46,
+  EF_TISC_MACH_TISCx47 = 47,
+  EF_TISC_MACH_TISCx54 = 54,
+};
+
+// ELF Relocation types for TISC
+enum {
+#include "ELFRelocs/TISC.def"
+};
+
+
 // CSKY Specific e_flags
 enum : unsigned {
   EF_CSKY_801 = 0xa,
@@ -1123,6 +1158,8 @@ enum : unsigned {
   SHT_MIPS_ABIFLAGS = 0x7000002a, // ABI information.
 
   SHT_MSP430_ATTRIBUTES = 0x70000003U,
+
+  SHT_TISC_ATTRIBUTES = 0x70000003U,
 
   SHT_RISCV_ATTRIBUTES = 0x70000003U,
 
