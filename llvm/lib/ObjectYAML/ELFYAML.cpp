@@ -895,6 +895,9 @@ void ScalarEnumerationTraits<ELFYAML::ELF_REL>::enumeration(
     case ELF::EM_TISC:
 #include "llvm/BinaryFormat/ELFRelocs/TISC.def"
     break;
+  case ELF::EM_88K:
+#include "llvm/BinaryFormat/ELFRelocs/M88k.def"
+    break;
   case ELF::EM_LANAI:
 #include "llvm/BinaryFormat/ELFRelocs/Lanai.def"
     break;

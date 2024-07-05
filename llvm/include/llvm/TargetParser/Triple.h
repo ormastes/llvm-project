@@ -67,6 +67,7 @@ public:
     mips64el,       // MIPS64EL: mips64el, mips64r6el, mipsn32el, mipsn32r6el
     msp430,         // MSP430: msp430
     tisc,
+    m88k,           // M88000 (big endian): m88k
     ppc,            // PPC: powerpc
     ppcle,          // PPCLE: powerpc (little endian)
     ppc64,          // PPC64: powerpc64, ppu
@@ -737,6 +738,11 @@ public:
       getVendor() == Triple::SCEI &&
       getOS() == Triple::PS5;
   }
+  /// Tests whether the target is M88k.
+  bool isM88k() const {
+    return getArch() == Triple::m88k;
+  }
+
 
   /// Tests whether the target is the PS4 or PS5 platform.
   bool isPS() const { return isPS4() || isPS5(); }
