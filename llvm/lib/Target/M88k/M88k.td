@@ -20,8 +20,10 @@ include "llvm/Target/Target.td"
 //===----------------------------------------------------------------------===//
 
 include "M88kRegisterInfo.td"
+include "M88kCallingConv.td"
 include "M88kInstrFormats.td"
 include "M88kInstrInfo.td"
+ 
 
 //===----------------------------------------------------------------------===//
 // Declare the target which we are implementing
