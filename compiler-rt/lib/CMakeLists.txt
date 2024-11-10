@@ -48,7 +48,11 @@ if(COMPILER_RT_BUILD_SANITIZERS)
 endif()
 
 if(COMPILER_RT_BUILD_PROFILE AND COMPILER_RT_HAS_PROFILE)
+if(COMPILER_RT_BAREMETAL_BUILD)
+  compiler_rt_build_runtime(baremetal_profile)
+else()
   compiler_rt_build_runtime(profile)
+endif()
 endif()
 
 if(COMPILER_RT_BUILD_XRAY)
