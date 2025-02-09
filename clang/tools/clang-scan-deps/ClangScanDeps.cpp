@@ -691,7 +691,101 @@ static std::string getModuleCachePath(ArrayRef<std::string> Args) {
   driver::Driver::getDefaultModuleCachePath(Path);
   return std::string(Path);
 }
+#ifdef _WIN32
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
+#include <cctype>
+#include <cstdlib>    // For _strdup on Windows
+#include <chrono>
+#include <thread>
+#include "llvm/Support/raw_ostream.h"
 
+// Tokenize a string with support for quoted arguments.
+// This function splits the input into tokens, treating text enclosed in double quotes as one token.
+// It supports a simple escaping mechanism with the backslash.
+static std::vector<std::string> tokenizeResponseFile(const std::string &Content) {
+  std::vector<std::string> Tokens;
+  std::string Token;
+  bool inQuotes = false;
+  bool escapeNext = false;
+
+  for (char c : Content) {
+    if (escapeNext) {
+      Token.push_back(c);
+      escapeNext = false;
+    } else if (c == '\\') {
+      escapeNext = true;
+    } else if (c == '"') {
+      inQuotes = !inQuotes; // Toggle quote mode.
+    } else if (std::isspace(static_cast<unsigned char>(c)) && !inQuotes) {
+      if (!Token.empty()) {
+        Tokens.push_back(Token);
+        Token.clear();
+      }
+    } else {
+      Token.push_back(c);
+    }
+  }
+  if (!Token.empty())
+    Tokens.push_back(Token);
+  return Tokens;
+}
+
+// Helper: Pre-expand any response files in the given argument vector.
+static void expandResponseFiles(std::vector<std::string>& Args) {
+  std::vector<std::string> Expanded;
+  for (const auto &Arg : Args) {
+    // Check if the argument begins with '@'
+    if (!Arg.empty() && Arg[0] == '@') {
+      std::string ResponseFilename = Arg.substr(1);
+      std::ifstream InFile(ResponseFilename, std::ios::binary);
+      if (!InFile) {
+        llvm::errs() << "Unable to open response file: " << ResponseFilename << "\n";
+        Expanded.push_back(Arg);
+        continue;
+      }
+      // Read entire contents
+      std::stringstream Buffer;
+      Buffer << InFile.rdbuf();
+      // Close the file
+      InFile.close();
+      // print Buffer to OS
+      //llvm::errs() << "Response file content: " << Buffer.str() << "\n";
+      //llvm::errs() << "Size: " << Buffer.str().size() << "\n";
+      std::string Content = Buffer.str();
+      // Tokenize the content so that quoted strings (even with spaces) are kept together.
+      std::vector<std::string> Tokens = tokenizeResponseFile(Content);
+      for (const auto &T : Tokens)
+        Expanded.push_back(T);
+    } else {
+      Expanded.push_back(Arg);
+    }
+  }
+  Args = std::move(Expanded);
+}
+/// expandResponseFilesInArgs takes the original argc/argv as input and produces
+/// a new set of arguments (returned via newArgc and newArgv) with any "@response"
+/// file arguments fully expanded. The new arguments are allocated on the heap
+/// (so they must be freed later by the caller).
+static void expandResponseFilesInArgs(int argc, char** argv, int &newArgc, char** &newArgv) {
+  std::vector<std::string> Args;
+  for (int i = 0; i < argc; i++) {
+    Args.push_back(argv[i]);
+  }
+  // Pre-expand any response files.
+  expandResponseFiles(Args);
+
+  newArgc = static_cast<int>(Args.size());
+  // Allocate newArgv as an array of char*.
+  newArgv = new char*[newArgc];
+  for (int i = 0; i < newArgc; i++) {
+    // Use _strdup (MSVC) or strdup depending on your compiler.
+    newArgv[i] = _strdup(Args[i].c_str());
+  }
+}
+#endif
 // getCompilationDataBase - If -compilation-database is set, load the
 // compilation database from the specified file. Otherwise if the we're
 // generating P1689 format, trying to generate the compilation database
@@ -786,6 +880,13 @@ getCompilationDataBase(int argc, char **argv, std::string &ErrorMessage) {
 }
 
 int clang_scan_deps_main(int argc, char **argv, const llvm::ToolContext &) {
+#ifdef _WIN32
+int newArgc = 0;
+char **newArgv = nullptr;
+expandResponseFilesInArgs(argc, argv, newArgc, newArgv);
+argc = newArgc;
+argv = newArgv;
+#endif
   std::string ErrorMessage;
   std::unique_ptr<tooling::CompilationDatabase> Compilations =
       getCompilationDataBase(argc, argv, ErrorMessage);
