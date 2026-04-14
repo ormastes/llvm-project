@@ -134,3 +134,12 @@ if(CLANG_ORDER_FILE AND
     set_target_properties(clang PROPERTIES LINK_DEPENDS ${CLANG_ORDER_FILE})
   endif()
 endif()
+
+if(CLANG_SIMPLEOS_EMBED_LLD)
+  if(NOT "lld" IN_LIST LLVM_ENABLE_PROJECTS)
+    message(FATAL_ERROR
+      "CLANG_SIMPLEOS_EMBED_LLD=ON requires 'lld' in LLVM_ENABLE_PROJECTS")
+  endif()
+  target_compile_definitions(clang PRIVATE CLANG_SIMPLEOS_EMBED_LLD)
+  target_link_libraries(clang PRIVATE lldELF lldCommon)
+endif()

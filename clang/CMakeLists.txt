@@ -500,6 +500,10 @@ add_subdirectory(runtime)
 option(CLANG_BUILD_EXAMPLES "Build CLANG example programs by default." OFF)
 add_subdirectory(examples)
 
+option(CLANG_SIMPLEOS_EMBED_LLD
+       "Embed LLD as a library for *-simpleos targets (enables static clang)"
+       OFF)
+
 if(APPLE)
   # this line is needed as a cleanup to ensure that any CMakeCaches with the old
   # default value get updated to the new default.

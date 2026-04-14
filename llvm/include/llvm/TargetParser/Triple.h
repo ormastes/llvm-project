@@ -237,6 +237,7 @@ public:
     ShaderModel, // DirectX ShaderModel
     LiteOS,
     Serenity,
+    SimpleOS, // SimpleOS microkernel
     Vulkan, // Vulkan SPIR-V
     LastOSType = Vulkan
   };

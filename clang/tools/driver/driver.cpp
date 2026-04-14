@@ -48,6 +48,9 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/VirtualFileSystem.h"
+#ifdef CLANG_SIMPLEOS_EMBED_LLD
+#include "lld/Common/Driver.h"
+#endif
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Host.h"
 #include <memory>
@@ -393,7 +396,35 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
     FailingCommand = &*C->getJobs().begin();
   if (C && !C->containsError()) {
     SmallVector<std::pair<int, const Command *>, 4> FailingCommands;
+#ifdef CLANG_SIMPLEOS_EMBED_LLD
+    // Short-circuit: if the target is *-simpleos and the only remaining job is
+    // ld.lld, call lld::elf::link directly instead of spawning a subprocess.
+    {
+      llvm::Triple TT(TheDriver.getTargetTriple());
+      if (TT.getOS() == llvm::Triple::SimpleOS) {
+        for (auto &Job : C->getJobs()) {
+          StringRef ExecName =
+              llvm::sys::path::filename(Job.getExecutable());
+          if (ExecName == "ld.lld" || ExecName == "lld") {
+            const llvm::opt::ArgStringList &LLDArgs = Job.getArguments();
+            std::vector<const char *> LLDArgV;
+            LLDArgV.push_back("lld");
+            for (const char *A : LLDArgs)
+              LLDArgV.push_back(A);
+            lld::Result R =
+                lld::elf::link(LLDArgV, llvm::outs(), llvm::errs(),
+                               /*exitEarly=*/false, /*disableOutput=*/false);
+            Res = R.retCode;
+            goto simpleos_lld_done;
+          }
+        }
+      }
+    }
+#endif
     Res = TheDriver.ExecuteCompilation(*C, FailingCommands);
+#ifdef CLANG_SIMPLEOS_EMBED_LLD
+    simpleos_lld_done:;
+#endif
 
     for (const auto &P : FailingCommands) {
       int CommandRes = P.first;
