@@ -148,41 +148,11 @@ if(CLANG_ORDER_FILE AND
   endif()
 endif()
 
-if (CLANG_BOLT AND NOT LLVM_BUILD_INSTRUMENTED)
-  # Add a clang-bolt target for backwards compatibility.
-  add_custom_target(clang-bolt DEPENDS clang)
-
-  set(CLANG_BOLT_INSTRUMENTED "clang-bolt.inst" CACHE STRING
-    "Name of BOLT-instrumented Clang binary")
-  set(CLANG_INSTRUMENTED ${LLVM_RUNTIME_OUTPUT_INTDIR}/${CLANG_BOLT_INSTRUMENTED})
-  set(PERF_TRAINING_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/../../utils/perf-training)
-  set(BOLT_FDATA ${PERF_TRAINING_BINARY_DIR}/prof.fdata)
-  get_llvm_lit_path(
-    lit_base_dir
-    lit_file_name
-    ALLOW_EXTERNAL
-  )
-  set(LIT_COMMAND "${lit_base_dir}/${lit_file_name}")
-
-  # This POST_BUILD command is executed unconditionally even if the clang target
-  # is already built.  We need to wrap the whole bolt optimization process in
-  # a single python wrapper, so that we can first check if the binary has
-  # already been optimized and then exit early with a 0 status if it has.
-  add_custom_command(
-    TARGET clang POST_BUILD
-    COMMAND  "${Python3_EXECUTABLE}" ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/perf-training/perf-helper.py
-             bolt-optimize
-	     --method ${CLANG_BOLT}
-	     --input $<TARGET_FILE:clang>
-	     --instrumented-output ${CLANG_INSTRUMENTED}
-	     --fdata ${BOLT_FDATA}
-	     --perf-training-binary-dir ${PERF_TRAINING_BINARY_DIR}
-	     --readelf $<TARGET_FILE:llvm-readobj>
-	     --bolt $<TARGET_FILE:llvm-bolt>
-	     --lit "${LIT_COMMAND}"
-	     --merge-fdata $<TARGET_FILE:merge-fdata>
-    COMMENT "Optimizing Clang with BOLT"
-    USES_TERMINAL
-    VERBATIM
-  )
+if(CLANG_SIMPLEOS_EMBED_LLD)
+  if(NOT "lld" IN_LIST LLVM_ENABLE_PROJECTS)
+    message(FATAL_ERROR
+      "CLANG_SIMPLEOS_EMBED_LLD=ON requires 'lld' in LLVM_ENABLE_PROJECTS")
+  endif()
+  target_compile_definitions(clang PRIVATE CLANG_SIMPLEOS_EMBED_LLD)
+  target_link_libraries(clang PRIVATE lldELF lldCommon)
 endif()
