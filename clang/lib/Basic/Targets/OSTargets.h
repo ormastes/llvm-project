@@ -287,6 +287,29 @@ public:
   }
 };
 
+// SimpleOS target
+template <typename Target>
+class LLVM_LIBRARY_VISIBILITY SimpleOSTargetInfo : public OSTargetInfo<Target> {
+protected:
+  void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
+                    MacroBuilder &Builder) const override {
+    // SimpleOS defines.
+    DefineStd(Builder, "simpleos", Opts);
+    Builder.defineMacro("__SIMPLEOS__");
+    Builder.defineMacro("__unix__");
+    Builder.defineMacro("__ELF__");
+    if (Opts.POSIXThreads)
+      Builder.defineMacro("_REENTRANT");
+  }
+
+public:
+  SimpleOSTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
+      : OSTargetInfo<Target>(Triple, Opts) {
+    this->WCharType = TargetInfo::SignedInt;
+    this->WIntType = TargetInfo::UnsignedInt;
+  }
+};
+
 // Hurd target
 template <typename Target>
 class LLVM_LIBRARY_VISIBILITY HurdTargetInfo : public OSTargetInfo<Target> {
