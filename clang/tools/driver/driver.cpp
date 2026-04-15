@@ -50,6 +50,7 @@
 #include "llvm/Support/VirtualFileSystem.h"
 #ifdef CLANG_SIMPLEOS_EMBED_LLD
 #include "lld/Common/Driver.h"
+LLD_HAS_DRIVER(elf)
 #endif
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Host.h"
@@ -411,10 +412,10 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
             LLDArgV.push_back("lld");
             for (const char *A : LLDArgs)
               LLDArgV.push_back(A);
-            lld::Result R =
+            bool Ok =
                 lld::elf::link(LLDArgV, llvm::outs(), llvm::errs(),
                                /*exitEarly=*/false, /*disableOutput=*/false);
-            Res = R.retCode;
+            Res = Ok ? 0 : 1;
             goto simpleos_lld_done;
           }
         }
