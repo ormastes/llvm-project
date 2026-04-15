@@ -1507,6 +1507,12 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   if (TI.getTriple().isOSBinFormatELF())
     Builder.defineMacro("__ELF__");
 
+  // SimpleOS target macro definitions.
+  if (TI.getTriple().getOS() == llvm::Triple::SimpleOS) {
+    Builder.defineMacro("__simpleos__");
+    Builder.defineMacro("__simpleos");  // K&R-style alias
+  }
+
   // Target OS macro definitions.
   if (PPOpts.DefineTargetOSMacros) {
     const llvm::Triple &Triple = TI.getTriple();
