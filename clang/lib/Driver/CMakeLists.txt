@@ -56,6 +56,7 @@ add_clang_library(clangDriver
   ToolChains/Flang.cpp
   ToolChains/FreeBSD.cpp
   ToolChains/Fuchsia.cpp
+  ToolChains/SimpleOS.cpp
   ToolChains/Gnu.cpp
   ToolChains/Haiku.cpp
   ToolChains/HIPUtility.cpp
