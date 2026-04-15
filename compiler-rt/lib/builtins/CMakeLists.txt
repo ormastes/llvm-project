@@ -834,6 +834,20 @@ else ()
     endif()
   endif()
 
+  # SimpleOS freestanding target: x86_64-unknown-simpleos
+  # No pthread, no dlopen; static archive only.
+  if(CMAKE_SYSTEM_NAME STREQUAL "SimpleOS")
+    include(CompilerRTSimpleOS)
+    append_list_if(COMPILER_RT_HAS_FFREESTANDING_FLAG -ffreestanding BUILTIN_CFLAGS)
+    # Disable PIC for a pure freestanding kernel-side archive.
+    list(REMOVE_ITEM BUILTIN_CFLAGS -fPIC)
+    set(COMPILER_RT_SIMPLEOS_BUILTINS_ARCH x86_64)
+    if(NOT CAN_TARGET_x86_64)
+      set(CAN_TARGET_x86_64 1)
+      list(APPEND BUILTIN_SUPPORTED_ARCH x86_64)
+    endif()
+  endif()
+
   set(BUILTIN_DEFS "")
 
   if(COMPILER_RT_BUILTINS_HIDE_SYMBOLS)
