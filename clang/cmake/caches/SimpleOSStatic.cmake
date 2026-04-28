@@ -57,8 +57,10 @@ set(CMAKE_BUILD_TYPE          "Release"        CACHE STRING "" FORCE)
 set(CMAKE_C_FLAGS_RELEASE     "-Os -DNDEBUG"   CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE   "-Os -DNDEBUG"   CACHE STRING "" FORCE)
 
-# ThinLTO: shaves binary size at link time; requires lld (set above).
-set(LLVM_ENABLE_LTO "Thin" CACHE STRING "" FORCE)
+# LTO disabled: host gcc does not support -flto=thin (clang-only flag).
+# Revisit once a baseline static build succeeds and the host toolchain is
+# confirmed to be clang (Option A chosen over Full/Thin — safest baseline).
+set(LLVM_ENABLE_LTO OFF CACHE BOOL "" FORCE)
 
 # ---------------------------------------------------------------------------
 # Disable non-essential tools (keep clang + lld only)
