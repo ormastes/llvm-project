@@ -9,6 +9,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Instrumentation/InstrOrderFile.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalValue.h"
@@ -21,7 +22,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/Instrumentation.h"
 #include <mutex>
-#include <sstream>
 
 using namespace llvm;
 #define DEBUG_TYPE "instrorderfile"
@@ -94,9 +94,8 @@ public:
         report_fatal_error(Twine("Failed to open ") + ClOrderFileWriteMapping +
                            " to save mapping file for order file instrumentation\n");
       } else {
-        std::stringstream stream;
-        stream << std::hex << MD5Hash(F.getName());
-        std::string singleLine = "MD5 " + stream.str() + " " +
+        std::string singleLine = "MD5 " +
+                                 utohexstr(MD5Hash(F.getName()), true) + " " +
                                  std::string(F.getName()) + '\n';
         OS << singleLine;
       }

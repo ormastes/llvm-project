@@ -23,14 +23,13 @@
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/YAMLParser.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Triple.h"
 #include <algorithm>
-#include <fstream>
 #include <optional>
-#include <sstream>
 #include <tuple>
 
 namespace clang {
@@ -180,15 +179,20 @@ static bool parseCrossTUIndexItem(StringRef LineRef, StringRef &LookupName,
 
 llvm::Expected<llvm::StringMap<std::string>>
 parseCrossTUIndex(StringRef IndexPath) {
-  std::ifstream ExternalMapFile{std::string(IndexPath)};
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> ExternalMapFile =
+      llvm::MemoryBuffer::getFile(IndexPath);
   if (!ExternalMapFile)
     return llvm::make_error<IndexError>(index_error_code::missing_index_file,
                                         IndexPath.str());
 
   llvm::StringMap<std::string> Result;
-  std::string Line;
+  StringRef Input = (*ExternalMapFile)->getBuffer();
   unsigned LineNo = 1;
-  while (std::getline(ExternalMapFile, Line)) {
+  while (!Input.empty()) {
+    StringRef Line;
+    std::tie(Line, Input) = Input.split('\n');
+    Line.consume_back("\r");
+
     // Split lookup name and file path
     StringRef LookupName, FilePathInIndex;
     if (!parseCrossTUIndexItem(Line, LookupName, FilePathInIndex))
@@ -213,11 +217,12 @@ parseCrossTUIndex(StringRef IndexPath) {
 
 std::string
 createCrossTUIndexString(const llvm::StringMap<std::string> &Index) {
-  std::ostringstream Result;
+  std::string Result;
+  llvm::raw_string_ostream OS(Result);
   for (const auto &E : Index)
-    Result << E.getKey().size() << ':' << E.getKey().str() << ' '
-           << E.getValue() << '\n';
-  return Result.str();
+    OS << E.getKey().size() << ':' << E.getKey().str() << ' ' << E.getValue()
+       << '\n';
+  return Result;
 }
 
 bool shouldImport(const VarDecl *VD, const ASTContext &ACtx) {

@@ -37,7 +37,6 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -540,7 +539,8 @@ public:
   }
 
   std::string getConditionHeaderString(unsigned Condition) {
-    std::ostringstream OS;
+    std::string Str;
+    raw_string_ostream OS(Str);
     OS << "Condition C" << Condition + 1 << " --> (";
     OS << CondLoc[Condition].first << ":" << CondLoc[Condition].second;
     OS << ")\n";
@@ -548,7 +548,8 @@ public:
   }
 
   std::string getTestVectorHeaderString() const {
-    std::ostringstream OS;
+    std::string Str;
+    raw_string_ostream OS(Str);
     if (getNumTestVectors() == 0) {
       OS << "None.\n";
       return OS.str();
@@ -566,7 +567,8 @@ public:
   std::string getTestVectorString(unsigned TestVectorIndex) {
     assert(TestVectorIndex < getNumTestVectors() &&
            "TestVector index out of bounds!");
-    std::ostringstream OS;
+    std::string Str;
+    raw_string_ostream OS(Str);
     const auto NumConditions = getNumConditions();
     // Add individual condition values to the string.
     OS << "  " << TestVectorIndex + 1 << " { ";
@@ -604,7 +606,8 @@ public:
   std::string getConditionCoverageString(unsigned Condition) {
     assert(Condition < getNumConditions() &&
            "Condition index is out of bounds!");
-    std::ostringstream OS;
+    std::string Str;
+    raw_string_ostream OS(Str);
 
     OS << "  C" << Condition + 1 << "-Pair: ";
     if (isCondFolded(Condition)) {

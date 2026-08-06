@@ -76,6 +76,10 @@ void lld::unlinkAsync(StringRef path) {
   }
   sys::fs::remove(path);
 #else
+#if !LLVM_ENABLE_THREADS
+  sys::fs::remove(path);
+  return;
+#endif
   if (parallel::strategy.ThreadsRequested == 1)
     return;
 

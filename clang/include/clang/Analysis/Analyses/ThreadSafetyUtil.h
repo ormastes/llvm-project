@@ -22,7 +22,6 @@
 #include <cstddef>
 #include <cstring>
 #include <iterator>
-#include <ostream>
 #include <string>
 #include <vector>
 
@@ -350,10 +349,6 @@ private:
 
   VectorData *Data = nullptr;
 };
-
-inline std::ostream& operator<<(std::ostream& ss, const StringRef str) {
-  return ss.write(str.data(), str.size());
-}
 
 } // namespace threadSafety
 } // namespace clang

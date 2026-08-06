@@ -19,10 +19,10 @@
 #include "llvm/Support/LineIterator.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <functional>
 #include <optional>
-#include <sstream>
 #include <string>
 
 using namespace clang;
@@ -159,15 +159,16 @@ static std::string NormalizeLine(const SourceManager &SM, const FullSourceLoc &L
               Buffer->getBufferStart(), BufferPos, Buffer->getBufferEnd());
 
   size_t NextStart = 0;
-  std::ostringstream LineBuff;
+  std::string LineBuff;
+  llvm::raw_string_ostream LineStream(LineBuff);
   while (!Lexer.LexFromRawLexer(Token) && NextStart < 2) {
     if (Token.isAtStartOfLine() && NextStart++ > 0)
       continue;
-    LineBuff << std::string(SM.getCharacterData(Token.getLocation()),
+    LineStream << StringRef(SM.getCharacterData(Token.getLocation()),
                             Token.getLength());
   }
 
-  return LineBuff.str();
+  return LineBuff;
 }
 
 static llvm::SmallString<32> GetMD5HashOfContent(StringRef Content) {

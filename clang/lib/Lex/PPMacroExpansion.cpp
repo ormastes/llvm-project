@@ -48,9 +48,7 @@
 #include <cstddef>
 #include <cstring>
 #include <ctime>
-#include <iomanip>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -1597,6 +1595,22 @@ asm("_ZNKSt8time_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE3putES3_"
     "RSt8ios_basecPK2tmPKcSB_");
 #endif
 
+static void formatTimestamp(const std::tm *TM, llvm::raw_ostream &OS) {
+  static const char *const Weekdays[] = {"Sun", "Mon", "Tue", "Wed",
+                                        "Thu", "Fri", "Sat"};
+  static const char *const Months[] = {"Jan", "Feb", "Mar", "Apr",
+                                      "May", "Jun", "Jul", "Aug",
+                                      "Sep", "Oct", "Nov", "Dec"};
+  if (!TM || TM->tm_wday < 0 || TM->tm_wday > 6 || TM->tm_mon < 0 ||
+      TM->tm_mon > 11) {
+    OS << "??? ??? ?? ??:??:?? ????";
+    return;
+  }
+  OS << llvm::format("%s %s %2d %02d:%02d:%02d %4d", Weekdays[TM->tm_wday],
+                     Months[TM->tm_mon], TM->tm_mday, TM->tm_hour, TM->tm_min,
+                     TM->tm_sec, TM->tm_year + 1900);
+}
+
 static bool IsBuiltinTrait(Token &Tok) {
 
 #define TYPE_TRAIT_1(Spelling, Name, Key)                                      \
@@ -1744,13 +1758,12 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
     Diag(Tok.getLocation(), diag::warn_pp_date_time);
     // MSVC, ICC, GCC, VisualAge C++ extension.  The generated string should be
     // of the form "Ddd Mmm dd hh::mm::ss yyyy", which is returned by asctime.
-    std::string Result;
-    std::stringstream TmpStream;
-    TmpStream.imbue(std::locale("C"));
+    SmallString<32> Result;
+    llvm::raw_svector_ostream TmpStream(Result);
     if (getPreprocessorOpts().SourceDateEpoch) {
       time_t TT = *getPreprocessorOpts().SourceDateEpoch;
       std::tm *TM = std::gmtime(&TT);
-      TmpStream << std::put_time(TM, "%a %b %e %T %Y");
+      formatTimestamp(TM, TmpStream);
     } else {
       // Get the file that we are lexing out of.  If we're currently lexing from
       // a macro, dig into the include stack.
@@ -1760,12 +1773,11 @@ void Preprocessor::ExpandBuiltinMacro(Token &Tok) {
       if (CurFile) {
         time_t TT = CurFile->getModificationTime();
         struct tm *TM = localtime(&TT);
-        TmpStream << std::put_time(TM, "%a %b %e %T %Y");
+        formatTimestamp(TM, TmpStream);
       }
     }
-    Result = TmpStream.str();
     if (Result.empty())
-      Result = "??? ??? ?? ??:??:?? ????";
+      TmpStream << "??? ??? ?? ??:??:?? ????";
     OS << '"' << Result << '"';
     Tok.setKind(tok::string_literal);
   } else if (II == Ident__FLT_EVAL_METHOD__) {

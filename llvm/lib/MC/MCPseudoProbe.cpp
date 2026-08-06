@@ -26,7 +26,6 @@
 #include <cassert>
 #include <limits>
 #include <memory>
-#include <sstream>
 #include <vector>
 
 #define DEBUG_TYPE "mcpseudoprobe"
@@ -301,12 +300,15 @@ void MCDecodedPseudoProbe::getInlineContext(
 
 std::string MCDecodedPseudoProbe::getInlineContextStr(
     const GUIDProbeFunctionMap &GUID2FuncMAP) const {
-  std::ostringstream OContextStr;
+  std::string ContextStr;
+  raw_string_ostream OContextStr(ContextStr);
   SmallVector<MCPseudoProbeFrameLocation, 16> ContextStack;
   getInlineContext(ContextStack, GUID2FuncMAP);
+  bool First = true;
   for (auto &Cxt : ContextStack) {
-    if (OContextStr.str().size())
+    if (!First)
       OContextStr << " @ ";
+    First = false;
     OContextStr << Cxt.first.str() << ":" << Cxt.second;
   }
   return OContextStr.str();
