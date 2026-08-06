@@ -25,8 +25,6 @@
 #include "llvm/Support/VirtualFileSystem.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include <sstream>
-
 using namespace llvm::opt;
 using namespace clang;
 using namespace clang::driver;
@@ -199,14 +197,15 @@ static void findMultilibsFromYAML(const ToolChain &TC, const Driver &D,
   if (Result.Multilibs.select(D, Flags, Result.SelectedMultilibs))
     return;
   D.Diag(clang::diag::warn_drv_missing_multilib) << llvm::join(Flags, " ");
-  std::stringstream ss;
+  std::string AvailableMultilibs;
+  llvm::raw_string_ostream ss(AvailableMultilibs);
 
   // If multilib selection didn't complete successfully, report a list
   // of all the configurations the user could have provided.
   for (const Multilib &Multilib : Result.Multilibs)
     if (!Multilib.isError())
       ss << "\n" << llvm::join(Multilib.flags(), " ");
-  D.Diag(clang::diag::note_drv_available_multilibs) << ss.str();
+  D.Diag(clang::diag::note_drv_available_multilibs) << AvailableMultilibs;
 
   // Now report any custom error messages requested by the YAML. We do
   // this after displaying the list of available multilibs, because

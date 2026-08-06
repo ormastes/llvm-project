@@ -24,10 +24,10 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/raw_ostream.h"
 #include <memory>
 #include <optional>
 #include <queue>
-#include <sstream>
 
 using namespace llvm;
 using namespace clang;
@@ -57,7 +57,8 @@ public:
 // "DRE ==> parent-of-DRE ==> grandparent-of-DRE ==> ...".
 static std::string getDREAncestorString(const DeclRefExpr *DRE,
                                         ASTContext &Ctx) {
-  std::stringstream SS;
+  std::string Storage;
+  llvm::raw_string_ostream SS(Storage);
   const Stmt *St = DRE;
   StmtDebugPrinter StmtPriner;
 
@@ -2708,7 +2709,8 @@ fixUPCAddressofArraySubscriptWithSpan(const UnaryOperator *Node) {
   const Expr *Idx = ArraySub->getIdx();
   const SourceManager &SM = Ctx.getSourceManager();
   const LangOptions &LangOpts = Ctx.getLangOpts();
-  std::stringstream SS;
+  std::string Storage;
+  llvm::raw_string_ostream SS(Storage);
   bool IdxIsLitZero = false;
 
   if (auto ICE = Idx->getIntegerConstantExpr(Ctx))
@@ -2785,7 +2787,8 @@ UPCPreIncrementGadget::getFixits(const FixitStrategy &S) const {
   if (const VarDecl *VD = dyn_cast<VarDecl>(DREs.front()->getDecl())) {
     if (S.lookup(VD) == FixitStrategy::Kind::Span) {
       FixItList Fixes;
-      std::stringstream SS;
+      std::string Storage;
+      llvm::raw_string_ostream SS(Storage);
       StringRef varName = VD->getName();
       const ASTContext &Ctx = VD->getASTContext();
 
@@ -2962,7 +2965,8 @@ static FixItList fixLocalVarDeclWithSpan(const VarDecl *D, ASTContext &Ctx,
   }
 
   // Will hold the text for `std::span<T> Ident`:
-  std::stringstream SS;
+  std::string Storage;
+  llvm::raw_string_ostream SS(Storage);
 
   SS << *SpanTyText;
   // Fix the initializer if it exists:
@@ -3076,7 +3080,8 @@ createOverloadsForFixedParams(const FixitStrategy &S, const FunctionDecl *FD,
   const auto NewOverloadSignatureCreator =
       [&SM, &LangOpts, &NewTysTexts,
        &ParmsMask](const FunctionDecl *FD) -> std::optional<std::string> {
-    std::stringstream SS;
+    std::string Storage;
+    llvm::raw_string_ostream SS(Storage);
 
     SS << ";";
     SS << getEndOfLine().str();
@@ -3121,7 +3126,8 @@ createOverloadsForFixedParams(const FixitStrategy &S, const FunctionDecl *FD,
   const auto OldOverloadDefCreator =
       [&Handler, &SM, &LangOpts, &NewTysTexts,
        &ParmsMask](const FunctionDecl *FD) -> std::optional<std::string> {
-    std::stringstream SS;
+    std::string Storage;
+    llvm::raw_string_ostream SS(Storage);
 
     SS << getEndOfLine().str();
     // Append: attr-name ret-type func-name "(" param-list ")" "{"
@@ -3225,7 +3231,8 @@ static FixItList fixParamWithSpan(const ParmVarDecl *PVD, const ASTContext &Ctx,
     return {};
   }
 
-  std::stringstream SS;
+  std::string Storage;
+  llvm::raw_string_ostream SS(Storage);
   std::optional<std::string> SpanTyText = createSpanTypeForVarDecl(PVD, Ctx);
 
   if (PteTyQualifiers)

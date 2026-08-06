@@ -92,7 +92,6 @@
 #include <cstddef>
 #include <cstring>
 #include <ctime>
-#include <fstream>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -4448,13 +4447,14 @@ bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,
   }
 
   if (const Arg *A = Args.getLastArg(OPT_frandomize_layout_seed_file_EQ)) {
-    std::ifstream SeedFile(A->getValue(0));
+    llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> SeedFile =
+        llvm::MemoryBuffer::getFile(A->getValue(0));
 
-    if (!SeedFile.is_open())
+    if (!SeedFile)
       Diags.Report(diag::err_drv_cannot_open_randomize_layout_seed_file)
           << A->getValue(0);
-
-    std::getline(SeedFile, Opts.RandstructSeed);
+    else
+      Opts.RandstructSeed = (*SeedFile)->getBuffer().split('\n').first.str();
   }
 
   if (const Arg *A = Args.getLastArg(OPT_frandomize_layout_seed_EQ))

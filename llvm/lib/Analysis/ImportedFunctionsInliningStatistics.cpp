@@ -15,9 +15,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
-#include <iomanip>
-#include <sstream>
 #include <string>
 
 using namespace llvm;
@@ -87,12 +86,13 @@ static std::string getStatString(const char *Msg, int32_t Fraction, int32_t All,
   if (All != 0)
     Result = 100 * static_cast<double>(Fraction) / All;
 
-  std::stringstream Str;
-  Str << std::setprecision(4) << Msg << ": " << Fraction << " [" << Result
-      << "% of " << PercentageOfMsg << "]";
+  std::string Str;
+  raw_string_ostream OS(Str);
+  OS << Msg << ": " << Fraction << " [" << format("%.4g", Result) << "% of "
+     << PercentageOfMsg << "]";
   if (LineEnd)
-    Str << "\n";
-  return Str.str();
+    OS << "\n";
+  return Str;
 }
 
 void ImportedFunctionsInliningStatistics::dump(const bool Verbose) {

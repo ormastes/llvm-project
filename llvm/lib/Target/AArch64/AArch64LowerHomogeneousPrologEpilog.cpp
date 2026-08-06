@@ -24,8 +24,8 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/raw_ostream.h"
 #include <optional>
-#include <sstream>
 
 using namespace llvm;
 
@@ -128,7 +128,8 @@ enum FrameHelperType { Prolog, PrologFrame, Epilog, EpilogTail };
 /// OUTLINED_FUNCTION_PROLOG_x19x20.
 static std::string getFrameHelperName(SmallVectorImpl<unsigned> &Regs,
                                       FrameHelperType Type, unsigned FpOffset) {
-  std::ostringstream RegStream;
+  std::string RegName;
+  raw_string_ostream RegStream(RegName);
   switch (Type) {
   case FrameHelperType::Prolog:
     RegStream << "OUTLINED_FUNCTION_PROLOG_";

@@ -83,9 +83,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <iomanip>
 #include <limits>
-#include <sstream>
 #include <string>
 #include <tuple>
 
@@ -3131,11 +3129,10 @@ void FunctionStackPoisoner::initializeCallbacks(Module &M) {
 
   for (size_t Val : {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0xf1, 0xf2,
                      0xf3, 0xf5, 0xf8}) {
-    std::ostringstream Name;
-    Name << kAsanSetShadowPrefix;
-    Name << std::setw(2) << std::setfill('0') << std::hex << Val;
+    std::string Name =
+        std::string(kAsanSetShadowPrefix) + utohexstr(Val, true, 2);
     AsanSetShadowFunc[Val] =
-        M.getOrInsertFunction(Name.str(), IRB.getVoidTy(), IntptrTy, IntptrTy);
+        M.getOrInsertFunction(Name, IRB.getVoidTy(), IntptrTy, IntptrTy);
   }
 
   AsanAllocaPoisonFunc = M.getOrInsertFunction(

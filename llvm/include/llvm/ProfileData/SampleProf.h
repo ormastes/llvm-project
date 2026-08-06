@@ -25,13 +25,13 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/ProfileData/HashKeyMap.h"
 #include <algorithm>
 #include <cstdint>
 #include <list>
 #include <map>
 #include <set>
-#include <sstream>
 #include <string>
 #include <system_error>
 #include <unordered_map>
@@ -480,7 +480,8 @@ struct SampleContextFrame {
   }
 
   std::string toString(bool OutputLineLocation) const {
-    std::ostringstream OContextStr;
+    std::string ContextStr;
+    raw_string_ostream OContextStr(ContextStr);
     OContextStr << Func.str();
     if (OutputLineLocation) {
       OContextStr << ":" << Location.LineOffset;
@@ -619,7 +620,8 @@ public:
 
   static std::string getContextString(SampleContextFrames Context,
                                       bool IncludeLeafLineLocation = false) {
-    std::ostringstream OContextStr;
+    std::string ContextStr;
+    raw_string_ostream OContextStr(ContextStr);
     for (uint32_t I = 0; I < Context.size(); I++) {
       if (OContextStr.str().size()) {
         OContextStr << " @ ";

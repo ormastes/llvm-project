@@ -45,7 +45,6 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/Instrumentation.h"
 #include <deque>
-#include <sstream>
 #include <unordered_map>
 #include <vector>
 using namespace llvm;
@@ -3001,10 +3000,7 @@ private:
   }
 
   static std::string getNodeId(NodeRef Node) {
-    std::stringstream SStream;
-    SStream << std::hex << "N0x" << (unsigned long long)Node;
-    std::string Result = SStream.str();
-    return Result;
+    return ("N0x" + Twine::utohexstr((uint64_t)Node)).str();
   }
 };
 

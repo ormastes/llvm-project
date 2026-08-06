@@ -35,7 +35,6 @@
 #include <cstdint>
 #include <optional>
 #include <queue>
-#include <sstream>
 #include <unordered_map>
 
 using namespace llvm;
@@ -450,7 +449,7 @@ class MemLocFragmentFill {
   /// Format string describing an FragsInMemMap (IntervalMap) interval.
   std::string toString(FragsInMemMap::const_iterator It, bool Newline = true) {
     std::string String;
-    std::stringstream S(String);
+    raw_string_ostream S(String);
     if (It.valid()) {
       S << "[" << It.start() << ", " << It.stop()
         << "): " << toString(It.value());

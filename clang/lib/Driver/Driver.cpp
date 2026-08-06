@@ -2341,12 +2341,14 @@ bool Driver::HandleImmediateArgs(Compilation &C) {
 
   if (C.getArgs().hasArg(options::OPT_print_target_triple)) {
     llvm::outs() << TC.getTripleString() << "\n";
+    llvm::outs().flush();
     return false;
   }
 
   if (C.getArgs().hasArg(options::OPT_print_effective_triple)) {
     const llvm::Triple Triple(TC.ComputeEffectiveClangTriple(C.getArgs()));
     llvm::outs() << Triple.getTriple() << "\n";
+    llvm::outs().flush();
     return false;
   }
 

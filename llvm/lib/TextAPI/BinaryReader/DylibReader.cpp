@@ -17,13 +17,12 @@
 #include "llvm/Object/Binary.h"
 #include "llvm/Object/MachOUniversal.h"
 #include "llvm/Support/Endian.h"
+#include "llvm/Support/Format.h"
 #include "llvm/TargetParser/Triple.h"
 #include "llvm/TextAPI/InterfaceFile.h"
 #include "llvm/TextAPI/RecordsSlice.h"
 #include "llvm/TextAPI/TextAPIError.h"
-#include <iomanip>
 #include <set>
-#include <sstream>
 #include <string>
 #include <tuple>
 
@@ -192,12 +191,12 @@ static Error readMachOHeader(MachOObjectFile *Obj, RecordsSlice &Slice) {
     }
     case MachO::LC_UUID: {
       auto UUIDLC = Obj->getUuidCommand(LCI);
-      std::stringstream Stream;
+      std::string UUID;
+      raw_string_ostream Stream(UUID);
       for (unsigned I = 0; I < 16; ++I) {
         if (I == 4 || I == 6 || I == 8 || I == 10)
           Stream << '-';
-        Stream << std::setfill('0') << std::setw(2) << std::uppercase
-               << std::hex << static_cast<int>(UUIDLC.uuid[I]);
+        Stream << format_hex_no_prefix(UUIDLC.uuid[I], 2, true);
       }
       BA.UUID = Slice.copyString(Stream.str());
       break;

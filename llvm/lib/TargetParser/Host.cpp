@@ -472,7 +472,7 @@ StringRef sys::detail::getHostCPUNameForRISCV(StringRef ProcCpuinfoContent) {
 }
 
 StringRef sys::detail::getHostCPUNameForBPF() {
-#if !defined(__linux__) || !defined(__x86_64__)
+#if !defined(__linux__) || !defined(__x86_64__) || defined(__simpleos__)
   return "generic";
 #else
   uint8_t v3_insns[40] __attribute__ ((aligned (8))) =

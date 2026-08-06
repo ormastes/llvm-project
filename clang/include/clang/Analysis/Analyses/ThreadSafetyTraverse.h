@@ -22,8 +22,8 @@
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/raw_ostream.h"
 #include <cstdint>
-#include <ostream>
 
 namespace clang {
 namespace threadSafety {
@@ -925,7 +925,7 @@ protected:
   }
 };
 
-class StdPrinter : public PrettyPrinter<StdPrinter, std::ostream> {};
+class StdPrinter : public PrettyPrinter<StdPrinter, llvm::raw_ostream> {};
 
 } // namespace til
 } // namespace threadSafety

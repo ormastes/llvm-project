@@ -334,6 +334,9 @@ std::string getMainExecutable(const char *argv0, void *MainAddr) {
   char link_path[PATH_MAX];
   if (realpath(DLInfo.dli_fname, link_path))
     return link_path;
+#elif defined(__simpleos__)
+  if (argv0 && argv0[0])
+    return std::string(argv0);
 #else
 #error GetMainExecutable is not implemented on this host yet.
 #endif

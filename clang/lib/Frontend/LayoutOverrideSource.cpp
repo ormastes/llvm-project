@@ -9,8 +9,8 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/Basic/CharInfo.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
-#include <fstream>
 #include <string>
 
 using namespace clang;
@@ -40,20 +40,22 @@ static bool parseUnsigned(StringRef &S, unsigned long long &ULL) {
 }
 
 LayoutOverrideSource::LayoutOverrideSource(StringRef Filename) {
-  std::ifstream Input(Filename.str().c_str());
-  if (!Input.is_open())
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> Input =
+      llvm::MemoryBuffer::getFile(Filename);
+  if (!Input)
     return;
 
   // Parse the output of -fdump-record-layouts.
   std::string CurrentType;
   Layout CurrentLayout;
   bool ExpectingType = false;
+  StringRef Lines = (*Input)->getBuffer();
 
-  while (Input.good()) {
-    std::string Line;
-    getline(Input, Line);
-
-    StringRef LineStr(Line);
+  while (!Lines.empty()) {
+    std::pair<StringRef, StringRef> Split = Lines.split('\n');
+    StringRef LineStr = Split.first;
+    Lines = Split.second;
+    LineStr.consume_back("\r");
 
     // Determine whether the following line will start a
     if (LineStr.contains("*** Dumping AST Record Layout")) {
@@ -259,4 +261,3 @@ LLVM_DUMP_METHOD void LayoutOverrideSource::dump() {
     OS << "]\n";
   }
 }
-

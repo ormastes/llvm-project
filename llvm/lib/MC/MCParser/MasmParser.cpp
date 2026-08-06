@@ -66,7 +66,6 @@
 #include <deque>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -3211,12 +3210,12 @@ bool MasmParser::handleMacroEntry(const MCAsmMacro *M, SMLoc NameLoc,
   // eliminate this, although we should protect against infinite loops.
   unsigned MaxNestingDepth = AsmMacroMaxNestingDepth;
   if (ActiveMacros.size() == MaxNestingDepth) {
-    std::ostringstream MaxNestingDepthError;
-    MaxNestingDepthError << "macros cannot be nested more than "
-                         << MaxNestingDepth << " levels deep."
-                         << " Use -asm-macro-max-nesting-depth to increase "
-                            "this limit.";
-    return TokError(MaxNestingDepthError.str());
+    std::string MaxNestingDepthError;
+    raw_string_ostream OS(MaxNestingDepthError);
+    OS << "macros cannot be nested more than " << MaxNestingDepth
+       << " levels deep."
+       << " Use -asm-macro-max-nesting-depth to increase this limit.";
+    return TokError(OS.str());
   }
 
   MCAsmMacroArguments A;

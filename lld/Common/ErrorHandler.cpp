@@ -19,7 +19,9 @@
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
+#if !defined(__simpleos__)
 #include <regex>
+#endif
 
 using namespace llvm;
 using namespace lld;
@@ -171,6 +173,10 @@ std::string ErrorHandler::getLocation(const Twine &msg) {
   if (!vsDiagnostics)
     return std::string(logName);
 
+#if defined(__simpleos__)
+  (void)msg;
+  return std::string(logName);
+#else
   static std::regex regexes[] = {
       std::regex(
           R"(^undefined (?:\S+ )?symbol:.*\n)"
@@ -202,6 +208,7 @@ std::string ErrorHandler::getLocation(const Twine &msg) {
   }
 
   return std::string(logName);
+#endif
 }
 
 void ErrorHandler::reportDiagnostic(StringRef location, Colors c,
@@ -253,6 +260,7 @@ void ErrorHandler::warn(const Twine &msg) {
 void ErrorHandler::error(const Twine &msg) {
   // If Visual Studio-style error message mode is enabled,
   // this particular error is printed out as two errors.
+#if !defined(__simpleos__)
   if (vsDiagnostics) {
     static std::regex re(R"(^(duplicate symbol: .*))"
                          R"((\n>>> defined at \S+:\d+.*\n>>>.*))"
@@ -266,6 +274,7 @@ void ErrorHandler::error(const Twine &msg) {
       return;
     }
   }
+#endif
 
   bool exit = false;
   {

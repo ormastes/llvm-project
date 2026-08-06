@@ -21,6 +21,7 @@
 #ifndef LLD_COMMON_MEMORY_H
 #define LLD_COMMON_MEMORY_H
 
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/Allocator.h"
 
 namespace lld {
@@ -65,7 +66,11 @@ template <typename T, typename... U> T *make(U &&... args) {
 template <typename T>
 inline llvm::SpecificBumpPtrAllocator<T> &
 getSpecificAllocSingletonThreadLocal() {
+#if LLVM_ENABLE_THREADS
   thread_local SpecificAlloc<T> instance;
+#else
+  static SpecificAlloc<T> instance;
+#endif
   return instance.alloc;
 }
 
