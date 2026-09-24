@@ -317,7 +317,7 @@ std::string getMainExecutable(const char *argv0, void *MainAddr) {
       return std::string(real_path);
     break; // Found entry, but realpath failed.
   }
-#elif defined(HAVE_DLOPEN)
+#elif defined(HAVE_DLOPEN) && !defined(__simpleos__)
   // Use dladdr to get executable path if available.
   Dl_info DLInfo;
   int err = dladdr(MainAddr, &DLInfo);
