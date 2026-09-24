@@ -178,6 +178,13 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
       default: // Assume MSVC for unknown environments
         return std::make_unique<MicrosoftARM64TargetInfo>(Triple, Opts);
       }
+    case llvm::Triple::SimpleOS:
+      // lane-C1 aarch64: mirror the x86_64 SimpleOS registration so
+      // __SIMPLEOS__/__unix__/__ELF__ are predefined (the OS-level
+      // __simpleos__ predefines from 3b33ba807 cover all arches; this is
+      // the TargetInfo half of that patch, previously x86_64-only).
+      return std::make_unique<SimpleOSTargetInfo<AArch64leTargetInfo>>(Triple,
+                                                                       Opts);
     default:
       return std::make_unique<AArch64leTargetInfo>(Triple, Opts);
     }
