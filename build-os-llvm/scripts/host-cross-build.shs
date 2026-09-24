@@ -1,0 +1,24 @@
+#!/bin/sh
+# Host-runnable cross toolchain: aarch64-linux host build of the simpleos fork
+# with LLVM_DEFAULT_TARGET_TRIPLE=x86_64-unknown-simpleos. Produces native
+# aarch64 bin/clang-20 + ld.lld that understand -target x86_64-unknown-simpleos
+# (fork SimpleOS ToolChain + __simpleos__ predefines, commits a553eea19/3b33ba807).
+# EXTRA beyond lane C1's repo scripts (recorded deviation) — satisfies the
+# host-side verification and equips later lanes' "host cross compile" rows.
+set -e
+LLVM_SRC=/home/yoon/llvm-project-simpleos
+WORK=$LLVM_SRC/build-os-llvm
+B=$WORK/host-cross-x86_64
+
+cmake -G Ninja \
+    -S "$LLVM_SRC/llvm" \
+    -B "$B" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_ENABLE_PROJECTS="clang;lld" \
+    -DLLVM_TARGETS_TO_BUILD="X86" \
+    -DLLVM_DEFAULT_TARGET_TRIPLE="x86_64-unknown-simpleos" \
+    -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_BENCHMARKS=OFF \
+    -DLLVM_INCLUDE_EXAMPLES=OFF
+ninja -C "$B" -j 20 clang lld
+echo "==== host-cross build done ===="

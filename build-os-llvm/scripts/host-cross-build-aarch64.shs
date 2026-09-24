@@ -1,0 +1,20 @@
+#!/bin/sh
+# Host-runnable cross toolchain, aarch64 variant: native aarch64-linux build of
+# the simpleos fork with LLVM_DEFAULT_TARGET_TRIPLE=aarch64-unknown-simpleos.
+set -e
+LLVM_SRC=/home/yoon/llvm-project-simpleos
+WORK=$LLVM_SRC/build-os-llvm
+B=$WORK/host-cross-aarch64
+
+cmake -G Ninja \
+    -S "$LLVM_SRC/llvm" \
+    -B "$B" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_ENABLE_PROJECTS="clang;lld" \
+    -DLLVM_TARGETS_TO_BUILD="AArch64" \
+    -DLLVM_DEFAULT_TARGET_TRIPLE="aarch64-unknown-simpleos" \
+    -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_BENCHMARKS=OFF \
+    -DLLVM_INCLUDE_EXAMPLES=OFF
+ninja -C "$B" -j 20 clang lld
+echo "==== host-cross-aarch64 build done ===="

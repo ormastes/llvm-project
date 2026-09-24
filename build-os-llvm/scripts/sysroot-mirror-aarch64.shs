@@ -1,0 +1,370 @@
+#!/bin/sh
+# AArch64 sysroot for lane C1 (aarch64 variant).
+# Header tree: cloned from the verified x86_64 sysroot (shim content is
+# arch-independent C declarations; __config_site/v1 libc++ headers identical).
+# libc/crt0/runtime: mirrors src/os/port/llvm/sysroot.shs aarch64 branch
+# (direct per-file compiles; aarch64 crt0/syscall/setjmp .S heredocs — the
+# repo has NO examples/09_embedded arm64 crt0, so the sysroot.shs heredoc crt0
+# is the source; RECORDED adaptation).
+set -e
+
+REPO_ROOT=/home/yoon/dev/simple          # read-only inputs only
+LIBC_DIR="$REPO_ROOT/src/os/libc"
+WORK=/home/yoon/llvm-project-simpleos/build-os-llvm
+LLVM_SRC=/home/yoon/llvm-project-simpleos
+SYSROOT="$WORK/sysroot-aarch64"
+TRIPLE=aarch64-unknown-simpleos
+SIMPLE_BUILD_JOBS=20
+LIBC_BUILD="$WORK/libc-build-aarch64"
+LIBCXX_BUILD="$WORK/libcxx-aarch64-unknown-simpleos"
+LIBCXXABI_BUILD="$WORK/libcxxabi-aarch64-unknown-simpleos"
+LIBUNWIND_BUILD="$WORK/libunwind-aarch64-unknown-simpleos"
+
+CC="${CC:-clang}"
+CXX="${CXX:-clang++}"
+if command -v llvm-ar >/dev/null 2>&1; then AR=llvm-ar; else AR=ar; fi
+
+echo "[sysroot-aarch64] Building SimpleOS sysroot at $SYSROOT (triple $TRIPLE)"
+mkdir -p "$SYSROOT/lib" "$SYSROOT/share/simpleos"
+rm -f "$SYSROOT/share/simpleos/target-triple.txt"
+
+# -- libc (aarch64 branch of sysroot.shs) ------------------------------------
+echo "[sysroot-aarch64] Building SimpleOS libc for $TRIPLE..."
+mkdir -p "$LIBC_BUILD"
+CFLAGS="--target=$TRIPLE --sysroot=$SYSROOT -ffreestanding -nostdlib -fno-builtin -fno-stack-protector -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables -O2 -Wall -Wextra -Wno-unused-parameter -D__simpleos__=1 -I$LIBC_DIR/include"
+for src in \
+    simpleos_libc.c simpleos_math.c simpleos_math_ext.c simpleos_fs.c \
+    simpleos_pthread.c simpleos_alloc.c simpleos_process.c \
+    simpleos_string_ext.c simpleos_stdlib_ext.c \
+    simpleos_time.c simpleos_printf_float.c simpleos_cxxabi.c \
+    simpleos_dlmalloc.c simpleos_signal.c simpleos_libc_ext.c \
+    simpleos_poll.c simpleos_process_wait.c \
+    simpleos_pthread_rwlock.c simpleos_pthread_cond.c \
+    simpleos_sched.c simpleos_epoll.c simpleos_eventfd.c \
+    simpleos_timerfd.c simpleos_signalfd.c simpleos_inotify.c \
+    simpleos_fs_walk.c simpleos_glob_stub.c simpleos_pwd_stub.c \
+    simpleos_strfmon.c simpleos_fork.c simpleos_ipc.c \
+    simpleos_socket.c simpleos_filelock.c simpleos_statvfs.c \
+    simpleos_utsname.c
+do
+    "$CC" $CFLAGS -c "$LIBC_DIR/$src" -o "$LIBC_BUILD/${src%.c}.o"
+done
+
+cat > "$LIBC_BUILD/simpleos_crt0_aarch64.S" << 'ASMEOF'
+.section .text
+.global _start
+.type _start, %function
+_start:
+    adrp x0, __bss_start
+    add  x0, x0, :lo12:__bss_start
+    adrp x1, __bss_end
+    add  x1, x1, :lo12:__bss_end
+    cmp  x0, x1
+    b.hs 1f
+0:
+    strb wzr, [x0], #1
+    cmp  x0, x1
+    b.lo 0b
+1:
+    bl __libc_init_array
+    mov x0, #0
+    mov x1, #0
+    mov x2, #0
+    bl main
+    bl exit
+2:
+    b 2b
+.size _start, . - _start
+.weak __bss_start
+.weak __bss_end
+ASMEOF
+cat > "$LIBC_BUILD/simpleos_syscall_aarch64.S" << 'ASMEOF'
+.section .text
+.global simpleos_syscall
+.type simpleos_syscall, %function
+simpleos_syscall:
+    mov x8, x0
+    mov x0, x1
+    mov x1, x2
+    mov x2, x3
+    mov x3, x4
+    mov x4, x5
+    svc #0
+    ret
+.size simpleos_syscall, . - simpleos_syscall
+
+.global __clear_cache
+.type __clear_cache, %function
+__clear_cache:
+    ret
+.size __clear_cache, . - __clear_cache
+ASMEOF
+cat > "$LIBC_BUILD/simpleos_setjmp_aarch64.S" << 'ASMEOF'
+.section .text
+.global setjmp
+.type setjmp, %function
+setjmp:
+    stp x19, x20, [x0, #0]
+    stp x21, x22, [x0, #16]
+    stp x23, x24, [x0, #32]
+    stp x29, x30, [x0, #48]
+    mov x1, sp
+    str x1, [x0, #64]
+    mov x0, #0
+    ret
+.size setjmp, . - setjmp
+
+.global _setjmp
+.type _setjmp, %function
+_setjmp:
+    b setjmp
+.size _setjmp, . - _setjmp
+
+.global longjmp
+.type longjmp, %function
+longjmp:
+    ldp x19, x20, [x0, #0]
+    ldp x21, x22, [x0, #16]
+    ldp x23, x24, [x0, #32]
+    ldp x29, x30, [x0, #48]
+    ldr x2, [x0, #64]
+    mov sp, x2
+    mov x0, x1
+    cmp x0, #0
+    cinc x0, x0, eq
+    ret
+.size longjmp, . - longjmp
+
+.global _longjmp
+.type _longjmp, %function
+_longjmp:
+    b longjmp
+.size _longjmp, . - _longjmp
+ASMEOF
+"$CC" --target=$TRIPLE -ffreestanding -nostdlib -c "$LIBC_BUILD/simpleos_crt0_aarch64.S" -o "$LIBC_BUILD/simpleos_crt0.o"
+"$CC" --target=$TRIPLE -ffreestanding -nostdlib -c "$LIBC_BUILD/simpleos_syscall_aarch64.S" -o "$LIBC_BUILD/simpleos_syscall.o"
+"$CC" --target=$TRIPLE -ffreestanding -nostdlib -c "$LIBC_BUILD/simpleos_setjmp_aarch64.S" -o "$LIBC_BUILD/simpleos_setjmp.o"
+rm -f "$SYSROOT/lib/libsimpleos_c.a"
+"$AR" rcs "$SYSROOT/lib/libsimpleos_c.a" "$LIBC_BUILD"/*.o
+cp "$LIBC_BUILD/simpleos_crt0.o" "$SYSROOT/lib/crt0.o"
+echo "[sysroot-aarch64] Installed libsimpleos_c.a + crt0.o"
+
+# Pre-existing libc duplicate: simpleos_pthread.o and simpleos_pthread_cond.o
+# both define the pthread_cond family; localize the copies in pthread.o so the
+# dedicated cond TU (superset: adds timedwait) is the unique global provider.
+llvm-objcopy --localize-symbol=pthread_cond_init --localize-symbol=pthread_cond_destroy \
+    --localize-symbol=pthread_cond_signal --localize-symbol=pthread_cond_broadcast \
+    --localize-symbol=pthread_cond_wait --localize-symbol=pthread_condattr_init \
+    --localize-symbol=pthread_condattr_destroy "$LIBC_BUILD/simpleos_pthread.o"
+"$AR" r "$SYSROOT/lib/libsimpleos_c.a" "$LIBC_BUILD/simpleos_pthread.o"
+echo "[sysroot-aarch64] Localized duplicate pthread_cond_* in simpleos_pthread.o"
+
+# -- entry + Simple runtime ABI (aarch64 branch) ------------------------------
+"$CC" $CFLAGS -ffunction-sections -fdata-sections \
+    -c "$LIBC_DIR/simpleos_entry.c" -o "$SYSROOT/lib/simple_entry.o"
+mkdir -p "$LIBC_BUILD/entry"
+"$CC" $CFLAGS -ffunction-sections -fdata-sections \
+    -c "$LIBC_DIR/simpleos_simple_runtime.c" -o "$LIBC_BUILD/entry/simpleos_simple_runtime.o"
+rm -f "$SYSROOT/lib/libsimple_runtime_compat.a" "$SYSROOT/lib/libsimple_runtime.a"
+"$AR" rcs "$SYSROOT/lib/libsimple_runtime_compat.a" "$LIBC_BUILD/entry/simpleos_simple_runtime.o"
+cp "$SYSROOT/lib/libsimple_runtime_compat.a" "$SYSROOT/lib/libsimple_runtime.a"
+
+echo "[sysroot-aarch64] Cross-compiling Simple runtime sources for $TRIPLE..."
+RT_BUILD="$LIBC_BUILD/simple_runtime_native"
+mkdir -p "$RT_BUILD"
+RT_CFLAGS="--target=$TRIPLE -ffreestanding -nostdlib -nostdlibinc \
+    -fno-builtin -fno-stack-protector -fno-exceptions \
+    -fno-unwind-tables -fno-asynchronous-unwind-tables \
+    -ffunction-sections -fdata-sections -O2 -D__simpleos__=1 \
+    -DSIMPLE_RUNTIME_FREESTANDING_V2 -Wno-implicit-function-declaration \
+    -isystem $LIBC_DIR/include"
+RT_OBJS=""
+RT_FAILED=""
+for rt_src in runtime_simd_utf8 runtime_contracts \
+              runtime_memory runtime_time runtime_timestamp \
+              runtime_pool runtime_memtrack \
+              runtime_simpleos_syscall_adapters \
+              startup/baremetal/runtime_log
+do
+    rt_obj="$RT_BUILD/$(basename "$rt_src").o"
+    if "$CC" $RT_CFLAGS -c "$REPO_ROOT/src/runtime/$rt_src.c" -o "$rt_obj"; then
+        RT_OBJS="$RT_OBJS $rt_obj"
+    else
+        echo "[sysroot-aarch64] WARNING: skipping failed runtime source: $rt_src.c"
+        RT_FAILED="$RT_FAILED $rt_src"
+    fi
+done
+rm -f "$SYSROOT/lib/libsimple_runtime_native.a"
+"$AR" rcs "$SYSROOT/lib/libsimple_runtime_native.a" $RT_OBJS
+cp "$SYSROOT/lib/libsimple_runtime_native.a" "$SYSROOT/lib/libsimple_runtime.a"
+echo "[sysroot-aarch64] Built libsimple_runtime_native.a ($(echo $RT_OBJS | wc -w) members) skipped:${RT_FAILED:- none}"
+echo "[sysroot-aarch64] NOTE: runtime_native.c excluded (same Simple-HEAD drift as x86_64; not consumed by clang lanes)"
+
+# -- libc++ (same source list + flags as x86_64, aarch64 target) --------------
+echo "[sysroot-aarch64] Building libc++.a for $TRIPLE..."
+mkdir -p "$LIBCXX_BUILD"
+LIBCXX_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -std=c++23 -ffreestanding -nostdlib -nostdinc++ -fno-exceptions -fno-rtti -fvisibility=hidden -fvisibility-inlines-hidden -fsized-deallocation -fsigned-char -D__simpleos__=1 -DLIBC_NAMESPACE=__llvm_libc -D_LIBCPP_BUILDING_LIBRARY -D_LIBCPP_BUILDING_HAS_NO_ABI_LIBRARY -D_LIBCPP_REMOVE_TRANSITIVE_INCLUDES -D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS= -D_LIBCPP_PSTL_BACKEND_SERIAL=1 -D_LIBCPP_HAS_CLOCK_GETTIME=1 -I$LLVM_SRC/libcxx/src -I$LLVM_SRC/libc -isystem $SYSROOT/include/c++/v1 -isystem $SYSROOT/include"
+for src in \
+    new.cpp algorithm.cpp any.cpp bind.cpp call_once.cpp charconv.cpp chrono.cpp \
+    error_category.cpp exception.cpp expected.cpp \
+    filesystem/filesystem_clock.cpp filesystem/filesystem_error.cpp \
+    filesystem/path.cpp functional.cpp hash.cpp memory.cpp \
+    memory_resource.cpp new_handler.cpp new_helpers.cpp optional.cpp \
+    print.cpp random.cpp random_shuffle.cpp ryu/d2fixed.cpp ryu/d2s.cpp \
+    ryu/f2s.cpp stdexcept.cpp string.cpp system_error.cpp typeinfo.cpp \
+    valarray.cpp variant.cpp vector.cpp verbose_abort.cpp \
+    atomic.cpp barrier.cpp condition_variable_destructor.cpp \
+    condition_variable.cpp future.cpp mutex_destructor.cpp mutex.cpp \
+    shared_mutex.cpp thread.cpp
+do
+    obj="$LIBCXX_BUILD/$(printf '%s' "$src" | tr '/.' '__').o"
+    mkdir -p "$(dirname "$obj")"
+    "$CXX" $LIBCXX_FLAGS -c "$LLVM_SRC/libcxx/src/$src" -o "$obj"
+done
+rm -f "$SYSROOT/lib/libc++.a"
+"$AR" rcs "$SYSROOT/lib/libc++.a" "$LIBCXX_BUILD"/*.o
+echo "[sysroot-aarch64] Installed libc++.a"
+
+# -- libc++abi (no-exceptions) ------------------------------------------------
+echo "[sysroot-aarch64] Building libc++abi.a (no-exceptions) for $TRIPLE..."
+mkdir -p "$LIBCXXABI_BUILD"
+LIBCXXABI_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -std=c++23 -ffreestanding -nostdlib -nostdinc++ -fno-exceptions -fno-rtti -fvisibility=hidden -fvisibility-inlines-hidden -fstrict-aliasing -fsigned-char -D__simpleos__=1 -D_LIBCPP_BUILDING_LIBRARY -DHAVE___CXA_THREAD_ATEXIT_IMPL=0 -I$LLVM_SRC/libcxxabi/include -I$LLVM_SRC/libcxxabi/src -I$LLVM_SRC/libcxx/src -isystem $SYSROOT/include/c++/v1 -isystem $SYSROOT/include"
+for src in \
+    cxa_aux_runtime.cpp cxa_default_handlers.cpp cxa_demangle.cpp \
+    cxa_exception_storage.cpp cxa_guard.cpp cxa_handlers.cpp \
+    cxa_vector.cpp cxa_virtual.cpp cxa_noexception.cpp \
+    stdlib_exception.cpp stdlib_stdexcept.cpp stdlib_typeinfo.cpp \
+    abort_message.cpp fallback_malloc.cpp private_typeinfo.cpp
+do
+    obj="$LIBCXXABI_BUILD/$(printf '%s' "$src" | tr '/.' '__').o"
+    PERFILE_FLAGS="$LIBCXXABI_FLAGS"
+    case "$src" in
+        private_typeinfo.cpp) PERFILE_FLAGS="$(printf '%s' "$LIBCXXABI_FLAGS" | sed 's/-fno-rtti/-frtti/')" ;;
+    esac
+    "$CXX" $PERFILE_FLAGS -c "$LLVM_SRC/libcxxabi/src/$src" -o "$obj"
+done
+rm -f "$SYSROOT/lib/libc++abi.a"
+"$AR" rcs "$SYSROOT/lib/libc++abi.a" "$LIBCXXABI_BUILD"/*.o
+echo "[sysroot-aarch64] Installed libc++abi.a"
+
+# -- libunwind ----------------------------------------------------------------
+echo "[sysroot-aarch64] Building libunwind.a for $TRIPLE..."
+mkdir -p "$LIBUNWIND_BUILD"
+LIBUNWIND_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -ffreestanding -nostdlib -nostdinc++ -fno-exceptions -fno-rtti -fvisibility=hidden -fvisibility-inlines-hidden -D__simpleos__=1 -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_HAS_NO_THREADS -I$LLVM_SRC/libunwind/include -isystem $SYSROOT/include"
+for src in libunwind.cpp UnwindLevel1.c UnwindLevel1-gcc-ext.c Unwind-sjlj.c; do
+    obj="$LIBUNWIND_BUILD/$(printf '%s' "$src" | tr '/.' '__').o"
+    case "$src" in
+        *.cpp) "$CXX" -std=c++17 $LIBUNWIND_FLAGS -c "$LLVM_SRC/libunwind/src/$src" -o "$obj" ;;
+        *.c)   "$CC" $LIBUNWIND_FLAGS -c "$LLVM_SRC/libunwind/src/$src" -o "$obj" ;;
+    esac
+done
+rm -f "$SYSROOT/lib/libunwind.a"
+"$AR" rcs "$SYSROOT/lib/libunwind.a" "$LIBUNWIND_BUILD"/*.o
+echo "[sysroot-aarch64] Installed libunwind.a"
+
+# -- compat shims (rebuilt for aarch64 from the x86_64 sources) ----------------
+echo "[sysroot-aarch64] Building compat shims + main shim for aarch64..."
+SHIMSRC="$WORK/libc-build-x86_64/posix_shims.c"
+"$CC" --target=$TRIPLE -ffreestanding -nostdlib -fno-builtin -fno-stack-protector \
+    -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables \
+    -O2 -isystem "$SYSROOT/include" -c "$SHIMSRC" -o "$LIBC_BUILD/libcxx_compat.o"
+"$AR" r "$SYSROOT/lib/libsimpleos_c.a" "$LIBC_BUILD/libcxx_compat.o"
+
+cat > "$LIBC_BUILD/main_shim.S" << 'EOF'
+/* lane-C1 aarch64: freestanding C++ emits _Z4mainv; crt0.o branches to C main. */
+    .weak _Z4mainv
+    .weak main
+    .type main, %function
+main:
+    b _Z4mainv
+    .size main, .-main
+EOF
+"$CC" --target=$TRIPLE -ffreestanding -nostdlib -c "$LIBC_BUILD/main_shim.S" -o "$LIBC_BUILD/main_shim.o"
+"$AR" r "$SYSROOT/lib/libsimpleos_c.a" "$LIBC_BUILD/main_shim.o"
+
+# -- linker script + placeholders (same as x86_64) -----------------------------
+cat > "$SYSROOT/share/simpleos/simpleos.ld" << 'LDEOF'
+/* SimpleOS aarch64 userspace linker script — mirrors the x86_64 layout
+ * (text at 0x10000000, static linking only). */
+ENTRY(_start)
+
+SECTIONS {
+    . = 0x10000000;
+
+    .text : {
+        *(.text.entry)
+        *(.text .text.*)
+    }
+
+    . = ALIGN(4096);
+    .rodata : {
+        *(.rodata .rodata.*)
+    }
+
+    . = ALIGN(4096);
+    .data : {
+        *(.data .data.*)
+        *(.sdata .sdata.*)
+    }
+
+    . = ALIGN(16);
+    .init_array : {
+        __init_array_start = .;
+        KEEP(*(.init_array .init_array.*))
+        __init_array_end = .;
+    }
+
+    . = ALIGN(16);
+    .fini_array : {
+        __fini_array_start = .;
+        KEEP(*(.fini_array .fini_array.*))
+        __fini_array_end = .;
+    }
+
+    . = ALIGN(16);
+    .tdata : {
+        _tls_start = .;
+        *(.tdata .tdata.*)
+    }
+
+    . = ALIGN(16);
+    .tbss : {
+        *(.tbss .tbss.*)
+        _tls_end = .;
+    }
+
+    . = ALIGN(4096);
+    .bss : {
+        __bss_start = .;
+        *(.bss .bss.*)
+        *(.sbss .sbss.*)
+        *(COMMON)
+        __bss_end = .;
+    }
+
+    _end = .;
+
+    /DISCARD/ : {
+        *(.comment)
+        *(.note .note.*)
+        *(.eh_frame)
+        *(.eh_frame_hdr)
+        *(.got)
+        *(.got.plt)
+        *(.plt)
+        *(.rela.plt)
+    }
+}
+LDEOF
+printf '%s\n' "$TRIPLE" > "$SYSROOT/share/simpleos/target-triple.txt"
+for l in libm libpthreads librt libdl libzircon; do
+    if [ ! -f "$SYSROOT/lib/$l.a" ]; then
+        printf 'int __simpleos_%s_placeholder;\n' "${l#lib}" > "$LIBC_BUILD/${l#lib}_ph.c"
+        "$CC" --target=$TRIPLE -ffreestanding -nostdlib -c "$LIBC_BUILD/${l#lib}_ph.c" -o "$LIBC_BUILD/${l#lib}_ph.o"
+        "$AR" rcs "$SYSROOT/lib/$l.a" "$LIBC_BUILD/${l#lib}_ph.o"
+        echo "[sysroot-aarch64] Installed placeholder $l.a"
+    fi
+done
+
+echo "[sysroot-aarch64] Sysroot ready: $SYSROOT"
+ls -la "$SYSROOT/lib/"

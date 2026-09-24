@@ -1,0 +1,34 @@
+#!/bin/sh
+# Lane C1 aarch64 stage 3 — compiler-rt builtins. Mirrors c1-compiler-rt.shs.
+set -e
+LLVM_SRC=/home/yoon/llvm-project-simpleos
+WORK=$LLVM_SRC/build-os-llvm
+SYSROOT=$WORK/sysroot-aarch64
+TRIPLE=aarch64-unknown-simpleos
+CROSS_DIR=$WORK/cross-$TRIPLE
+RT_DIR=$WORK/compiler-rt-$TRIPLE
+TOOLCHAIN=/home/yoon/dev/simple/src/os/toolchain/llvm/simpleos_cross_toolchain.cmake
+RT_CMAKE=/home/yoon/dev/simple/src/os/port/llvm/compiler_rt_cmake.cmake
+
+cmake -G Ninja \
+    -S "$LLVM_SRC/compiler-rt" \
+    -B "$RT_DIR" \
+    -C "$RT_CMAKE" \
+    -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
+    -DSIMPLEOS_SYSROOT="$SYSROOT" \
+    -DSIMPLEOS_TARGET_TRIPLE="$TRIPLE" \
+    -DSIMPLEOS_LLD_EMULATION=aarch64elf \
+    -DTRIPLE="$TRIPLE" \
+    -DCROSS_CLANG="$CROSS_DIR/bin/clang" \
+    -DCROSS_CLANGXX="$CROSS_DIR/bin/clang++" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER_TARGET="$TRIPLE" \
+    -DCMAKE_C_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -ffreestanding -nostdlib -D__simpleos__=1 -Dstatic_assert=_Static_assert -isystem $SYSROOT/include" \
+    -DCMAKE_ASM_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -D__simpleos__=1"
+ninja -C "$RT_DIR" -j 20
+
+RES_LIB_DIR="$SYSROOT/lib/clang/20/lib/$TRIPLE"
+mkdir -p "$RES_LIB_DIR"
+find "$RT_DIR" -name "*.a" -exec cp {} "$RES_LIB_DIR/" \;
+echo "[compiler-rt-arm64] staged builtins:"
+ls -la "$RES_LIB_DIR"

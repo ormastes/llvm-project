@@ -1,0 +1,18 @@
+#!/bin/sh
+# lane-C1 link wrapper (DEVIATION, recorded): host clang 23 delegates links for
+# the unknown-OS target aarch64-unknown-simpleos to a "<triple>-g++" found on
+# PATH. On this aarch64 host the only g++ is aarch64-linux-gnu whose collect2
+# injects aarch64-only flags and rejects clang's -m64. Translate the delegation
+# into a direct ld.lld invocation instead (ld.lld is multi-target; the
+# toolchain file supplies -m elf_x86_64 via -Wl,-m,elf_x86_64).
+LLD=/home/yoon/dev/llvm/install/bin/ld.lld
+linkargs=""
+for a in "$@"; do
+    case "$a" in
+        -nostdlib|-fuse-ld=lld|-static|-pie|-no-pie|-m64|-m32|-m16) ;;
+        -Wl,*) linkargs="$linkargs $(printf '%s' "${a#-Wl,}" | tr ',' ' ')" ;;
+        *) linkargs="$linkargs $a" ;;
+    esac
+done
+linkargs=$(printf '%s' "$linkargs" | sed 's/\(-m elf_x86_64\)/\1/; s/ -no-pie//g')
+exec "$LLD" $linkargs

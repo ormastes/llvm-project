@@ -1,0 +1,81 @@
+#!/bin/sh
+# Lane C1 build driver — mirrors /home/yoon/dev/simple/src/os/port/llvm/build.shs
+# stages 1-2 (host-tools, cross) with paths redirected to this workspace.
+# Deviations vs build.shs (recorded in report):
+#   - paths under build-os-llvm/ (Simple repo is read-only for this lane)
+#   - -DSIMPLEOS_LLD_EMULATION=elf_x86_64 (toolchain file leaves it unset,
+#     which makes every executable link fail with "unknown emulation")
+#   - stage 2 builds 'llvm-ar' first as a cheap full-link smoke test
+#   - explicit -j20 (build.shs relies on ninja auto-detect = nproc = 20 here)
+
+set -e
+LLVM_SRC=/home/yoon/llvm-project-simpleos
+WORK=$LLVM_SRC/build-os-llvm
+SYSROOT=$WORK/sysroot
+TRIPLE=x86_64-unknown-simpleos
+TOOLCHAIN=/home/yoon/dev/simple/src/os/toolchain/llvm/simpleos_cross_toolchain.cmake
+JOBS=20
+# bin-wrap provides x86_64-unknown-simpleos-g++ which translates clang's
+# generic-target g++ link delegation into a direct ld.lld invocation (see
+# bin-wrap script header; aarch64-host deviation).
+PATH="$WORK/bin-wrap:$PATH"
+export PATH
+
+echo "==== C1: stage 1 host-tools (native aarch64 tblgen) ===="
+cmake -G Ninja \
+    -S "$LLVM_SRC/llvm" \
+    -B "$WORK/host-tools" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_TARGETS_TO_BUILD="X86" \
+    -DLLVM_ENABLE_PROJECTS="clang" \
+    -DLLVM_BUILD_UTILS=ON \
+    -DLLVM_BUILD_TOOLS=OFF \
+    -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_BENCHMARKS=OFF \
+    -DLLVM_INCLUDE_EXAMPLES=OFF
+ninja -C "$WORK/host-tools" -j "$JOBS" llvm-tblgen clang-tblgen
+echo "==== C1: stage 1 complete ===="
+
+echo "==== C1: stage 2 configure (cross x86_64-unknown-simpleos) ===="
+cmake -G Ninja \
+    -S "$LLVM_SRC/llvm" \
+    -B "$WORK/cross-$TRIPLE" \
+    -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
+    -DSIMPLEOS_SYSROOT="$SYSROOT" \
+    -DSIMPLEOS_TARGET_TRIPLE="$TRIPLE" \
+    -DSIMPLEOS_LLD_EMULATION=elf_x86_64 \
+    -DCMAKE_C_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -ffreestanding -nostdlib -fno-exceptions -fno-rtti -D__simpleos__=1 -isystem $SYSROOT/include" \
+    -DCMAKE_ASM_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -D__simpleos__=1" \
+    -DCMAKE_CXX_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -ffreestanding -nostdlib -fno-exceptions -fno-rtti -D__simpleos__=1 -isystem $SYSROOT/include/c++/v1 -isystem $SYSROOT/include" \
+    -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+    -DCMAKE_TRY_COMPILE_PLATFORM_VARIABLES="SIMPLEOS_SYSROOT;SIMPLEOS_TARGET_TRIPLE;SIMPLEOS_LLD_EMULATION" \
+    -DFUCHSIA=TRUE \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_TABLEGEN="$WORK/host-tools/bin/llvm-tblgen" \
+    -DCLANG_TABLEGEN="$WORK/host-tools/bin/clang-tblgen" \
+    -DLLVM_TARGETS_TO_BUILD="X86" \
+    -DLLVM_ENABLE_PROJECTS="clang;lld" \
+    -DLLVM_DEFAULT_TARGET_TRIPLE="$TRIPLE" \
+    -DLLVM_HOST_TRIPLE="$TRIPLE" \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DLLVM_BUILD_LLVM_DYLIB=OFF \
+    -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_BENCHMARKS=OFF \
+    -DLLVM_INCLUDE_EXAMPLES=OFF \
+    -DLLVM_ENABLE_THREADS=OFF \
+    -DLLVM_ENABLE_ZLIB=OFF \
+    -DLLVM_ENABLE_ZSTD=OFF \
+    -DLLVM_ENABLE_TERMINFO=OFF \
+    -DLLVM_ENABLE_LIBXML2=OFF \
+    -DLLVM_ENABLE_LIBEDIT=OFF
+echo "==== C1: stage 2 configure complete ===="
+
+echo "==== C1: stage 2 link smoke test (llvm-ar) ===="
+ninja -C "$WORK/cross-$TRIPLE" -j "$JOBS" llvm-ar
+file "$WORK/cross-$TRIPLE/bin/llvm-ar" || true
+echo "==== C1: link smoke test done ===="
+
+echo "==== C1: stage 2 full build (clang, lld) ===="
+ninja -C "$WORK/cross-$TRIPLE" -j "$JOBS" clang lld
+echo "==== C1: stage 2 complete ===="
+echo "==== C1 ALL DONE ===="

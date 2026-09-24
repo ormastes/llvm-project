@@ -1,0 +1,580 @@
+# LLVM/Clang Smoke Test for SimpleOS
+#
+# Verifies sysroot integrity, header self-containment, libc symbols,
+# and (when LLVM is available) cross-compilation and linking.
+#
+# Designed to run even WITHOUT LLVM/Clang installed -- sysroot-only
+# validation is always performed; compilation tests are skipped
+# gracefully when tools are missing.
+#
+# Usage:
+#   bin/simple run src/os/port/llvm/test_smoke.spl
+#   bin/simple test src/os/port/llvm/test_smoke.spl
+
+use std.fs
+use std.process
+use std.spec
+
+val BUILD_DIR = "/home/yoon/llvm-project-simpleos/build-os-llvm/smoke"
+val SYSROOT = "/home/yoon/llvm-project-simpleos/build-os-llvm/sysroot"
+val LINKER_SCRIPT = "/home/yoon/llvm-project-simpleos/build-os-llvm/sysroot/share/simpleos/simpleos.ld"
+
+# Required sysroot files for a complete cross-compilation environment
+val SYSROOT_REQUIRED_HEADERS = [
+    "stdio.h",
+    "stdlib.h",
+    "string.h",
+]
+
+val SYSROOT_REQUIRED_LIBS = [
+    "libsimpleos_c.a",
+    "crt0.o",
+]
+
+val SYSROOT_REQUIRED_SHARE = [
+    "simpleos.ld",
+]
+
+# Key libc symbols that must be present in libsimpleos_c.a
+val REQUIRED_LIBC_SYMBOLS = [
+    "malloc", "free", "printf",
+    "open", "read", "write", "close",
+    "exit", "setjmp", "longjmp",
+    "pthread_mutex_lock",
+]
+
+fn ensure_build_dir():
+    if not fs.dir_exists(BUILD_DIR):
+        fs.mkdir_p(BUILD_DIR)
+
+fn write_test_source(name: text, source: text) -> text:
+    """Write a C source file and return its path."""
+    val path = "{BUILD_DIR}/{name}.c"
+    fs.write_text(path, source)
+    path
+
+fn has_tool(name: text) -> bool:
+    """Check whether a command-line tool is available on PATH."""
+    val result = process.run("which", [name])
+    result.exit_code == 0
+
+fn compile_for_simpleos(source_path: text, output: text) -> process.CommandResult:
+    """Compile a C file for SimpleOS using host clang with SimpleOS target."""
+    process.run("clang", [
+        "--target=x86_64-unknown-simpleos",
+        "--sysroot={SYSROOT}",
+        "-ffreestanding",
+        "-nostdlib",
+        "-fno-builtin",
+        "-I{SYSROOT}/include",
+        "-c",
+        source_path,
+        "-o", output,
+    ])
+
+fn link_for_simpleos(objects: [text], output: text) -> process.CommandResult:
+    """Link object files into a SimpleOS ELF binary."""
+    var args = [
+        "-m", "elf_x86_64",
+        "-T", LINKER_SCRIPT,
+        "-L{SYSROOT}/lib",
+        "-lsimpleos_c",
+        "-o", output,
+    ]
+    for obj in objects:
+        args = [obj] + args
+    process.run("ld.lld", args)
+
+# ===========================================================================
+# Sysroot validation tests (no external tools required)
+# ===========================================================================
+
+fn test_sysroot_exists() -> bool:
+    """Test: sysroot has expected layout with all required files."""
+    print "[smoke] Checking sysroot layout..."
+    var ok = true
+
+    # Check legacy header (backward compat)
+    if not fs.exists("{SYSROOT}/include/simpleos_libc.h"):
+        print "[smoke] FAIL: missing include/simpleos_libc.h"
+        ok = false
+
+    # Check standard C headers
+    for header in SYSROOT_REQUIRED_HEADERS:
+        val path = "{SYSROOT}/include/{header}"
+        if not fs.exists(path):
+            print "[smoke] FAIL: missing include/{header}"
+            ok = false
+
+    # Check library files
+    for lib in SYSROOT_REQUIRED_LIBS:
+        val path = "{SYSROOT}/lib/{lib}"
+        if not fs.exists(path):
+            print "[smoke] FAIL: missing lib/{lib}"
+            ok = false
+
+    # Check share files (linker script)
+    for share in SYSROOT_REQUIRED_SHARE:
+        val path = "{SYSROOT}/share/simpleos/{share}"
+        if not fs.exists(path):
+            print "[smoke] FAIL: missing share/simpleos/{share}"
+            ok = false
+
+    if ok:
+        print "[smoke] PASS: sysroot layout (all required files present)"
+    ok
+
+fn test_header_self_containment() -> bool:
+    """Test: each sysroot header exists and is non-empty (parseable)."""
+    print "[smoke] Checking header self-containment..."
+
+    if not fs.dir_exists("{SYSROOT}/include"):
+        print "[smoke] SKIP: sysroot/include does not exist"
+        return false
+
+    var ok = true
+    val all_headers = SYSROOT_REQUIRED_HEADERS + ["simpleos_libc.h"]
+
+    for header in all_headers:
+        val path = "{SYSROOT}/include/{header}"
+        if not fs.exists(path):
+            print "[smoke] FAIL: {header} does not exist"
+            ok = false
+        else:
+            val content = fs.read_text(path)
+            if content.len() == 0:
+                print "[smoke] FAIL: {header} is empty (0 bytes)"
+                ok = false
+            else:
+                print "[smoke]   {header}: {content.len()} bytes OK"
+
+    if ok:
+        print "[smoke] PASS: header self-containment"
+    ok
+
+fn test_libc_symbols() -> bool:
+    """Test: libsimpleos_c.a contains key libc symbols (requires nm)."""
+    print "[smoke] Checking libc symbols..."
+
+    val lib_path = "{SYSROOT}/lib/libsimpleos_c.a"
+    if not fs.exists(lib_path):
+        print "[smoke] SKIP: libsimpleos_c.a not found"
+        return false
+
+    if not has_tool("nm"):
+        print "[smoke] SKIP: nm not available -- cannot inspect symbols"
+        return true  # not a failure, just cannot verify
+
+    val result = process.run("nm", [lib_path])
+    if result.exit_code != 0:
+        print "[smoke] WARN: nm failed (exit {result.exit_code}), trying llvm-nm..."
+        # Try llvm-nm as fallback
+        if has_tool("llvm-nm"):
+            val llvm_result = process.run("llvm-nm", [lib_path])
+            if llvm_result.exit_code != 0:
+                print "[smoke] FAIL: both nm and llvm-nm failed"
+                return false
+            return check_symbols_in_output(llvm_result.stdout)
+        print "[smoke] SKIP: nm failed and llvm-nm not available"
+        return true  # graceful skip
+
+    check_symbols_in_output(result.stdout)
+
+fn check_symbols_in_output(nm_output: text) -> bool:
+    """Check that required symbols appear in nm output."""
+    var ok = true
+    var found_count = 0
+
+    for sym in REQUIRED_LIBC_SYMBOLS:
+        if nm_output.contains(sym):
+            found_count = found_count + 1
+        else:
+            print "[smoke] WARN: symbol '{sym}' not found in libsimpleos_c.a"
+            # Not a hard failure -- some symbols may be in separate objects
+            # or named differently (e.g., _pthread_mutex_lock)
+
+    print "[smoke]   Found {found_count}/{REQUIRED_LIBC_SYMBOLS.len()} required symbols"
+    if found_count == 0:
+        print "[smoke] FAIL: no required symbols found at all"
+        ok = false
+    else:
+        print "[smoke] PASS: libc symbol check ({found_count} found)"
+    ok
+
+# ===========================================================================
+# Compilation tests (require clang/lld)
+# ===========================================================================
+
+fn test_compile_empty() -> bool:
+    """Test: clang can compile an empty translation unit."""
+    print "[smoke] Compiling empty translation unit..."
+    ensure_build_dir()
+
+    val src = write_test_source("empty", "/* empty */\n")
+    val result = compile_for_simpleos(src, "{BUILD_DIR}/empty.o")
+
+    if result.exit_code != 0:
+        print "[smoke] FAIL: empty compile failed"
+        print result.stderr
+        return false
+
+    if not fs.exists("{BUILD_DIR}/empty.o"):
+        print "[smoke] FAIL: output object not produced"
+        return false
+
+    print "[smoke] PASS: empty compile"
+    true
+
+fn test_compile_hello() -> bool:
+    """Test: clang can compile a hello-world with libc shim."""
+    print "[smoke] Compiling hello world..."
+    ensure_build_dir()
+
+    val source = "#include <simpleos_libc.h>\n" +
+        "int main(void) {\n" +
+        "    printf(\"Hello from Clang on SimpleOS!\\n\");\n" +
+        "    return 0;\n" +
+        "}\n"
+    val src = write_test_source("hello", source)
+    val result = compile_for_simpleos(src, "{BUILD_DIR}/hello.o")
+
+    if result.exit_code != 0:
+        print "[smoke] FAIL: hello compile failed"
+        print result.stderr
+        return false
+
+    print "[smoke] PASS: hello compile"
+    true
+
+fn test_compile_math() -> bool:
+    """Test: clang can compile code using math functions."""
+    print "[smoke] Compiling math test..."
+    ensure_build_dir()
+
+    val source = "#include <simpleos_libc.h>\n" +
+        "int main(void) {\n" +
+        "    double x = sqrt(2.0);\n" +
+        "    printf(\"sqrt(2) = %f\\n\", x);\n" +
+        "    return 0;\n" +
+        "}\n"
+    val src = write_test_source("math_test", source)
+    val result = compile_for_simpleos(src, "{BUILD_DIR}/math_test.o")
+
+    if result.exit_code != 0:
+        print "[smoke] FAIL: math compile failed"
+        print result.stderr
+        return false
+
+    print "[smoke] PASS: math compile"
+    true
+
+fn test_link_hello() -> bool:
+    """Test: lld can link a compiled object into an ELF binary."""
+    print "[smoke] Linking hello binary..."
+    ensure_build_dir()
+
+    # Compile first
+    val source = "#include <simpleos_libc.h>\n" +
+        "void _start(void) {\n" +
+        "    printf(\"Hello!\\n\");\n" +
+        "    exit(0);\n" +
+        "}\n"
+    val src = write_test_source("link_test", source)
+    val compile_result = compile_for_simpleos(src, "{BUILD_DIR}/link_test.o")
+    if compile_result.exit_code != 0:
+        print "[smoke] FAIL: compile step failed"
+        print compile_result.stderr
+        return false
+
+    val link_result = link_for_simpleos(
+        ["{BUILD_DIR}/link_test.o"],
+        "{BUILD_DIR}/link_test"
+    )
+    if link_result.exit_code != 0:
+        print "[smoke] FAIL: link step failed"
+        print link_result.stderr
+        return false
+
+    if not fs.exists("{BUILD_DIR}/link_test"):
+        print "[smoke] FAIL: linked binary not produced"
+        return false
+
+    # Verify it is an ELF file
+    val file_result = process.run("file", ["{BUILD_DIR}/link_test"])
+    if not file_result.stdout.contains("ELF"):
+        print "[smoke] FAIL: output is not ELF format"
+        return false
+
+    print "[smoke] PASS: link hello"
+    true
+
+# ===========================================================================
+# Advanced compilation tests
+# ===========================================================================
+
+fn test_compile_multifile() -> bool:
+    """Test: compile two C files and link them together."""
+    print "[smoke] Compiling multi-file test..."
+    ensure_build_dir()
+
+    val lib_source = "int add(int a, int b) { return a + b; }\n" +
+        "int multiply(int a, int b) { return a * b; }\n"
+    val main_source = "#include <simpleos_libc.h>\n" +
+        "extern int add(int, int);\n" +
+        "extern int multiply(int, int);\n" +
+        "void _start(void) {\n" +
+        "    int sum = add(3, 4);\n" +
+        "    int prod = multiply(5, 6);\n" +
+        "    printf(\"sum=%d prod=%d\\n\", sum, prod);\n" +
+        "    exit(0);\n" +
+        "}\n"
+
+    val lib_src = write_test_source("multi_lib", lib_source)
+    val main_src = write_test_source("multi_main", main_source)
+
+    val r1 = compile_for_simpleos(lib_src, "{BUILD_DIR}/multi_lib.o")
+    if r1.exit_code != 0:
+        print "[smoke] FAIL: multi_lib compile failed"
+        print r1.stderr
+        return false
+
+    val r2 = compile_for_simpleos(main_src, "{BUILD_DIR}/multi_main.o")
+    if r2.exit_code != 0:
+        print "[smoke] FAIL: multi_main compile failed"
+        print r2.stderr
+        return false
+
+    if not has_tool("ld.lld"):
+        print "[smoke] SKIP: multi-file link (ld.lld not found)"
+        return true
+
+    val link_result = link_for_simpleos(
+        ["{BUILD_DIR}/multi_main.o", "{BUILD_DIR}/multi_lib.o"],
+        "{BUILD_DIR}/multi_test"
+    )
+    if link_result.exit_code != 0:
+        print "[smoke] FAIL: multi-file link failed"
+        print link_result.stderr
+        return false
+
+    print "[smoke] PASS: multi-file compile+link"
+    true
+
+fn test_all_headers_compile() -> bool:
+    """Test: each standard header compiles standalone with clang."""
+    print "[smoke] Checking all headers compile..."
+    ensure_build_dir()
+
+    val headers = [
+        "stdio.h", "stdlib.h", "string.h", "unistd.h",
+        "errno.h", "fcntl.h", "signal.h", "time.h",
+        "math.h", "setjmp.h", "pthread.h", "limits.h",
+        "assert.h", "stdint.h", "stddef.h",
+        "sys/types.h", "sys/stat.h", "dirent.h",
+    ]
+    var ok = true
+
+    for header in headers:
+        val source = "#include <{header}>\nint _dummy_{header.replace("/", "_").replace(".", "_")};\n"
+        val src_path = "{BUILD_DIR}/hdr_test.c"
+        fs.write_text(src_path, source)
+        val result = compile_for_simpleos(src_path, "{BUILD_DIR}/hdr_test.o")
+        if result.exit_code != 0:
+            print "[smoke] FAIL: header <{header}> does not compile"
+            print result.stderr
+            ok = false
+        else:
+            print "[smoke]   <{header}>: OK"
+
+    if ok:
+        print "[smoke] PASS: all headers compile"
+    ok
+
+fn test_compile_string_ops() -> bool:
+    """Test: compile code using string and memory operations."""
+    print "[smoke] Compiling string/memory operations test..."
+    ensure_build_dir()
+
+    val source = "#include <string.h>\n" +
+        "#include <stdlib.h>\n" +
+        "int test_strings(void) {\n" +
+        "    char buf[64];\n" +
+        "    strlcpy(buf, \"hello\", sizeof(buf));\n" +
+        "    strlcat(buf, \" world\", sizeof(buf));\n" +
+        "    if (strlen(buf) != 11) return 1;\n" +
+        "    void *p = memrchr(buf, 'w', strlen(buf));\n" +
+        "    if (!p) return 2;\n" +
+        "    return 0;\n" +
+        "}\n"
+    val src = write_test_source("string_ops", source)
+    val result = compile_for_simpleos(src, "{BUILD_DIR}/string_ops.o")
+
+    if result.exit_code != 0:
+        print "[smoke] FAIL: string_ops compile failed"
+        print result.stderr
+        return false
+
+    print "[smoke] PASS: string/memory operations compile"
+    true
+
+fn test_rust_target_specs() -> bool:
+    """Test: all Rust target spec JSON files exist and contain required fields."""
+    print "[smoke] Checking Rust target spec files..."
+
+    val target_specs = [
+        "src/os/toolchain/rust/x86_64-unknown-simpleos.json",
+        "src/os/toolchain/rust/aarch64-unknown-simpleos.json",
+        "src/os/toolchain/rust/armv7-unknown-simpleos.json",
+        "src/os/toolchain/rust/riscv64gc-unknown-simpleos.json",
+        "src/os/toolchain/rust/riscv32imac-unknown-simpleos.json",
+    ]
+
+    val required_fields = ["arch", "data-layout", "llvm-target", "panic-strategy", "linker"]
+    var ok = true
+
+    for spec_path in target_specs:
+        if not fs.exists(spec_path):
+            print "[smoke] FAIL: missing target spec: {spec_path}"
+            ok = false
+        else:
+            val content = fs.read_text(spec_path)
+            var fields_ok = true
+            for field in required_fields:
+                if not content.contains("\"{field}\""):
+                    print "[smoke] FAIL: {spec_path} missing field '{field}'"
+                    fields_ok = false
+                    ok = false
+            if fields_ok:
+                print "[smoke]   {spec_path}: OK"
+
+    if ok:
+        print "[smoke] PASS: all Rust target specs valid"
+    ok
+
+# ===========================================================================
+# Runner
+# ===========================================================================
+
+fn llvm_smoke_test_all() -> bool:
+    """Run all LLVM smoke tests. Returns true if all pass."""
+    print "=== LLVM/Clang Smoke Tests for SimpleOS ==="
+    var passed = 0
+    var failed = 0
+    var skipped = 0
+
+    val has_clang = has_tool("clang")
+    val has_lld = has_tool("ld.lld")
+    val sysroot_exists = fs.dir_exists(SYSROOT)
+
+    if not sysroot_exists:
+        print "[smoke] WARNING: sysroot not built ({SYSROOT} does not exist)"
+        print "[smoke] Run the sysroot build first, then re-run smoke tests."
+        print ""
+
+    # --- Phase 1: Sysroot-only validation (no external tools needed) ---
+    print ""
+    print "--- Phase 1: Sysroot Validation ---"
+
+    if sysroot_exists:
+        if test_sysroot_exists():
+            passed = passed + 1
+        else:
+            failed = failed + 1
+
+        if test_header_self_containment():
+            passed = passed + 1
+        else:
+            failed = failed + 1
+
+        if test_libc_symbols():
+            passed = passed + 1
+        else:
+            failed = failed + 1
+    else:
+        print "[smoke] SKIP: sysroot layout (not built)"
+        print "[smoke] SKIP: header self-containment (not built)"
+        print "[smoke] SKIP: libc symbols (not built)"
+        skipped = skipped + 3
+
+    # --- Phase 2: Compilation tests (require clang + sysroot) ---
+    print ""
+    print "--- Phase 2: Compilation Tests ---"
+
+    if not has_clang:
+        print "[smoke] LLVM not built -- clang not found on PATH"
+        print "[smoke] SKIP: compilation and link tests"
+        print "[smoke] Sysroot-only validation complete."
+        skipped = skipped + 4
+    else if not sysroot_exists:
+        print "[smoke] SKIP: compilation tests (sysroot not built)"
+        skipped = skipped + 4
+    else:
+        if test_compile_empty():
+            passed = passed + 1
+        else:
+            failed = failed + 1
+
+        if test_compile_hello():
+            passed = passed + 1
+        else:
+            failed = failed + 1
+
+        if test_compile_math():
+            passed = passed + 1
+        else:
+            failed = failed + 1
+
+        # Link test requires both clang and lld
+        if has_lld:
+            if test_link_hello():
+                passed = passed + 1
+            else:
+                failed = failed + 1
+        else:
+            print "[smoke] SKIP: link test (ld.lld not found)"
+            skipped = skipped + 1
+
+    # --- Phase 3: Multi-file and header completeness tests ---
+    print ""
+    print "--- Phase 3: Advanced Tests ---"
+
+    if not has_clang or not sysroot_exists:
+        print "[smoke] SKIP: advanced tests (clang or sysroot unavailable)"
+        skipped = skipped + 3
+    else:
+        if test_compile_multifile():
+            passed = passed + 1
+        else:
+            failed = failed + 1
+
+        if test_all_headers_compile():
+            passed = passed + 1
+        else:
+            failed = failed + 1
+
+        if test_compile_string_ops():
+            passed = passed + 1
+        else:
+            failed = failed + 1
+
+    # --- Phase 4: Target spec validation ---
+    print ""
+    print "--- Phase 4: Rust Target Spec Validation ---"
+
+    if test_rust_target_specs():
+        passed = passed + 1
+    else:
+        failed = failed + 1
+
+    print ""
+    print "=== Results: {passed} passed, {failed} failed, {skipped} skipped ==="
+
+    if skipped > 0 and failed == 0:
+        print "=== LLVM not built -- sysroot-only validation ==="
+
+    failed == 0
+
+fn main():
+    val ok = llvm_smoke_test_all()
+    if not ok:
+        process.exit(1)
