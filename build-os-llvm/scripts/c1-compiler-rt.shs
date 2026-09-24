@@ -27,7 +27,7 @@ cmake -G Ninja \
     -DCMAKE_C_COMPILER_TARGET="$TRIPLE" \
     -DCMAKE_C_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -ffreestanding -nostdlib -D__simpleos__=1 -Dstatic_assert=_Static_assert -isystem $SYSROOT/include" \
     -DCMAKE_ASM_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -D__simpleos__=1"
-ninja -C "$RT_DIR" -j 20
+ninja -C "$RT_DIR" -j "${SIMPLEOS_JOBS:-20}"
 
 # Stage into clang resource dir (mirrors build.shs).
 RES_LIB_DIR="$SYSROOT/lib/clang/20/lib/$TRIPLE"

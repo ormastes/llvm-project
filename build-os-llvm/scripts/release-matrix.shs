@@ -1,0 +1,162 @@
+#!/bin/sh
+# release-matrix.shs — SimpleOS multi-arch release toolchain matrix.
+#
+# Builds guest-runnable STATIC SimpleOS toolchains from this Linux aarch64
+# host by reusing the staged lane-C1 scripts per target:
+#   sysroot-<target>.shs  -> cross-<target>.shs  -> compiler-rt-<target>.shs
+#
+# Rows:
+#   aarch64-unknown-simpleos  RUN     (sysroot-aarch64 + bin-wrap-aarch64)
+#   x86_64-unknown-simpleos   RUN     (sysroot + bin-wrap)
+#   riscv64-unknown-simpleos  STAGED  — exact freestanding gaps recorded in
+#                                       $LOG_DIR/matrix-riscv64-unknown-simpleos.log
+#                                       (see row_riscv64_staged below)
+#
+# Parallelism is ALWAYS -j10: SIMPLEOS_JOBS=10 is exported for the staged
+# scripts (ninja -j / make -j) and CMAKE_BUILD_PARALLEL_LEVEL=10 covers the
+# rest. Override with SIMPLEOS_JOBS=<n> only for debugging.
+#
+# Incremental: rows re-run the staged scripts, which reconfigure cmake
+# (no-op on unchanged flags) and ninja no-ops on clean trees. Re-running a
+# completed row costs one sysroot/libc rebuild plus ninja no-op passes.
+#
+# Usage:
+#   sh release-matrix.shs [all|aarch64|x86_64|riscv64]...   (default: all)
+#   MATRIX_LOG_DIR=/tmp  (default /tmp)
+#
+# Per-row logs: $LOG_DIR/matrix-<triple>.log
+
+set -e
+
+SIMPLEOS_JOBS="${SIMPLEOS_JOBS:-10}"
+export SIMPLEOS_JOBS
+export CMAKE_BUILD_PARALLEL_LEVEL="$SIMPLEOS_JOBS"
+
+LLVM_SRC=/home/yoon/llvm-project-simpleos
+WORK=$LLVM_SRC/build-os-llvm
+SCRIPTS=$WORK/scripts
+LOG_DIR="${MATRIX_LOG_DIR:-/tmp}"
+
+# ---------------------------------------------------------------- run_logged --
+run_logged() {  # <row-name> <function>
+    name=$1; fn=$2
+    log=$LOG_DIR/matrix-$name.log
+    echo "[matrix] === row $name start $(date -Is) (jobs=$SIMPLEOS_JOBS) log=$log"
+    t0=$(date +%s)
+    if "$fn" > "$log" 2>&1; then
+        t1=$(date +%s)
+        echo "[matrix] === row $name DONE wall=$((t1 - t0))s"
+        sed -n '/== ARTIFACTS/,$p' "$log" | head -30
+    else
+        rc=$?
+        echo "[matrix] === row $name FAILED rc=$rc — tail of $log:"
+        tail -40 "$log"
+        exit "$rc"
+    fi
+}
+
+# ------------------------------------------------------------------- report --
+artifacts_report() {  # <triple> <sysroot-dir>
+    triple=$1; sysroot=$2
+    cross=$WORK/cross-$triple
+    rt=$WORK/compiler-rt-$triple
+    echo "== ARTIFACTS $triple =="
+    for f in "$cross/bin/clang" "$cross/bin/clang++" "$cross/bin/clang-20" \
+             "$cross/bin/ld.lld" "$cross/bin/lld" "$cross/bin/llvm-ar"; do
+        [ -e "$f" ] && ls -la "$f"
+    done
+    echo "-- file(1) --"
+    file "$cross/bin/clang-20" "$cross/bin/ld.lld" 2>/dev/null || true
+    echo "-- dir sizes --"
+    du -sh "$cross" "$sysroot" "$rt" 2>/dev/null || true
+    echo "-- staged builtins --"
+    ls -la "$sysroot/lib/clang/20/lib/$triple" 2>/dev/null || true
+}
+
+# --------------------------------------------------------------------- rows --
+row_aarch64() {
+    echo "=== aarch64 row: sysroot -> cross -> compiler-rt (j=$SIMPLEOS_JOBS) ==="
+    sh "$SCRIPTS/sysroot-mirror-aarch64.shs"
+    sh "$SCRIPTS/c1-cross-build-aarch64.shs"
+    sh "$SCRIPTS/c1-compiler-rt-aarch64.shs"
+    artifacts_report aarch64-unknown-simpleos "$WORK/sysroot-aarch64"
+}
+
+row_x86_64() {
+    echo "=== x86_64 row: sysroot -> cross -> compiler-rt (j=$SIMPLEOS_JOBS) ==="
+    sh "$SCRIPTS/sysroot-mirror.shs"
+    sh "$SCRIPTS/c1-cross-build.shs"
+    sh "$SCRIPTS/c1-compiler-rt.shs"
+    artifacts_report x86_64-unknown-simpleos "$WORK/sysroot"
+}
+
+row_riscv64_staged() {
+    # STAGED ROW — riscv64-unknown-simpleos is NOT buildable from this fork
+    # yet. Do not invent pieces; record the exact gaps (owner directive).
+    triple=riscv64-unknown-simpleos
+    echo "== STAGED ROW $triple — gap report (no build attempted) =="
+
+    echo "-- G1: clang TargetInfo registration (fork delta) --"
+    if grep -q "SimpleOSTargetInfo<RISCV" "$LLVM_SRC/clang/lib/Basic/Targets.cpp"; then
+        echo "PRESENT: riscv SimpleOSTargetInfo registration"
+    else
+        echo "MISSING: clang/lib/Basic/Targets.cpp riscv32/riscv64 switch arms"
+        echo "         lack 'case llvm::Triple::SimpleOS' — a riscv64 target"
+        echo "         falls to bare RISCV64TargetInfo: no __SIMPLEOS__ /"
+        echo "         __simpleos__ / __unix__ / __ELF__ macros, default"
+        echo "         WCharType. Exact delta (mirrors d96d49987980 for aarch64):"
+        echo "           case llvm::Triple::SimpleOS:"
+        echo "             return std::make_unique<SimpleOSTargetInfo<RISCV64TargetInfo>>(Triple, Opts);"
+        echo "         (+ riscv32 analog with RISCV32TargetInfo)"
+        echo "         NOTE: OS-level __simpleos__ predefines (02f36cf356fb) are"
+        echo "         arch-independent; G1 is the TargetInfo half only."
+    fi
+
+    echo "-- G2: sysroot --"
+    if [ -f "$SCRIPTS/sysroot-mirror-riscv64.shs" ]; then
+        echo "PRESENT: sysroot-mirror-riscv64.shs"
+    else
+        echo "MISSING: no riscv64 sysroot script. sysroot-mirror.shs (x86_64)"
+        echo "         and sysroot-mirror-aarch64.shs (aarch64) have no riscv64"
+        echo "         branch: SimpleOS libc per-file compile list, crt0, and"
+        echo "         simpleos.ld (text base 0x10000000 matches the x86_64"
+        echo "         kernel bump allocator — riscv64 load address needs a"
+        echo "         kernel-side decision), LP64 stdint shim is generic."
+    fi
+
+    echo "-- G3: bin-wrap link wrappers --"
+    for w in gcc g++; do
+        f="$WORK/bin-wrap-riscv64/riscv64-unknown-simpleos-$w"
+        if [ -f "$f" ]; then echo "PRESENT: $f"; else
+            echo "MISSING: $f (mirror bin-wrap/x86_64-unknown-simpleos-g++)"
+        fi
+    done
+
+    echo "-- G4: lld emulation --"
+    echo "UNTESTED: -DSIMPLEOS_LLD_EMULATION=elf64lriscv (lld target name"
+    echo "          elf64lriscv; x86_64 row uses elf_x86_64, aarch64 aarch64elf)"
+
+    echo "-- verified NON-gaps --"
+    echo "  OK: src/os/toolchain/llvm/simpleos_cross_toolchain.cmake maps"
+    echo "      ^riscv64/^riscv32 SIMPLEOS_TARGET_TRIPLE to CMAKE_SYSTEM_PROCESSOR"
+    echo "  OK: clang/lib/Driver/ToolChains/SimpleOS.cpp getSimpleOSCompilerRTArchName"
+    echo "      maps riscv64/riscv32"
+    echo "  OK: compiler-rt cmake OS matching is SimpleOS-name-generic"
+    echo "      (config-ix.cmake / builtin-config-ix.cmake)"
+    echo "  TODO on enable: LLVM_TARGETS_TO_BUILD=RISCV in the cross row script"
+    echo "== STAGED ROW $triple end =="
+}
+
+# ---------------------------------------------------------------------- main --
+targets="${*:-all}"
+[ "$targets" = "all" ] && targets="aarch64 x86_64 riscv64"
+
+for t in $targets; do
+    case $t in
+        aarch64) run_logged aarch64-unknown-simpleos row_aarch64 ;;
+        x86_64)  run_logged x86_64-unknown-simpleos row_x86_64 ;;
+        riscv64) run_logged riscv64-unknown-simpleos row_riscv64_staged ;;
+        *) echo "unknown row '$t' (want aarch64|x86_64|riscv64|all)" >&2; exit 2 ;;
+    esac
+done
+echo "[matrix] all requested rows complete $(date -Is)"

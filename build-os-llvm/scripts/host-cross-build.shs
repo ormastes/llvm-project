@@ -20,5 +20,5 @@ cmake -G Ninja \
     -DLLVM_INCLUDE_TESTS=OFF \
     -DLLVM_INCLUDE_BENCHMARKS=OFF \
     -DLLVM_INCLUDE_EXAMPLES=OFF
-ninja -C "$B" -j 20 clang lld
+ninja -C "$B" -j "${SIMPLEOS_JOBS:-20}" clang lld
 echo "==== host-cross build done ===="

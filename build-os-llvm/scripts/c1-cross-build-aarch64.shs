@@ -8,7 +8,7 @@ WORK=$LLVM_SRC/build-os-llvm
 SYSROOT=$WORK/sysroot-aarch64
 TRIPLE=aarch64-unknown-simpleos
 TOOLCHAIN=/home/yoon/dev/simple/src/os/toolchain/llvm/simpleos_cross_toolchain.cmake
-JOBS=20
+JOBS=${SIMPLEOS_JOBS:-20}
 PATH="$WORK/bin-wrap-aarch64:$PATH"
 export PATH
 

@@ -14,7 +14,7 @@ WORK=$LLVM_SRC/build-os-llvm
 SYSROOT=$WORK/sysroot
 TRIPLE=x86_64-unknown-simpleos
 TOOLCHAIN=/home/yoon/dev/simple/src/os/toolchain/llvm/simpleos_cross_toolchain.cmake
-JOBS=20
+JOBS=${SIMPLEOS_JOBS:-20}
 # bin-wrap provides x86_64-unknown-simpleos-g++ which translates clang's
 # generic-target g++ link delegation into a direct ld.lld invocation (see
 # bin-wrap script header; aarch64-host deviation).
