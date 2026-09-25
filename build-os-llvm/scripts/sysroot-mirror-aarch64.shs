@@ -28,10 +28,56 @@ echo "[sysroot-aarch64] Building SimpleOS sysroot at $SYSROOT (triple $TRIPLE)"
 mkdir -p "$SYSROOT/lib" "$SYSROOT/share/simpleos"
 rm -f "$SYSROOT/share/simpleos/target-triple.txt"
 
+# -- libc++ headers: staged from the fork on every run (same commands as
+#    sysroot-mirror.shs). The previous one-time manual clone silently rotted
+#    when the fork's libcxx headers were granularized (2026-09-25:
+#    memory_resource.cpp needs the templated __libcpp_allocate from the new
+#    <new>/__new/allocate.h; the stale monolithic header broke the libc++
+#    build). __config_site is the lane-C1 pinned generated config from the
+#    original staging — do not overwrite it here.
+if [ -d "$LLVM_SRC/libcxx/include" ]; then
+    mkdir -p "$SYSROOT/include/c++/v1"
+    cp -R "$LLVM_SRC/libcxx/include/." "$SYSROOT/include/c++/v1/"
+    cp "$LLVM_SRC/libcxx/vendor/llvm/default_assertion_handler.in" \
+        "$SYSROOT/include/c++/v1/__assertion_handler"
+    echo "[sysroot-aarch64] Staged libc++ headers from fork libcxx/include"
+fi
+
 # -- libc (aarch64 branch of sysroot.shs) ------------------------------------
 echo "[sysroot-aarch64] Building SimpleOS libc for $TRIPLE..."
 mkdir -p "$LIBC_BUILD"
 CFLAGS="--target=$TRIPLE --sysroot=$SYSROOT -ffreestanding -nostdlib -fno-builtin -fno-stack-protector -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables -O2 -Wall -Wextra -Wno-unused-parameter -D__simpleos__=1 -I$LIBC_DIR/include"
+# RECORDED adaptation: guest single-threaded mutex semantics. The repo libc
+# deliberately stubs the mutex family as ENOSYS ("until a kernel-owned atomic
+# mutex/futex handoff exists"). But LLVM's SmartMutex ALWAYS embeds a
+# std::recursive_mutex (LLVM_ENABLE_THREADS=0 only skips locking at runtime;
+# construction still runs pthread_mutex_init), so libc++'s recursive_mutex
+# ctor throws system_error(ENOSYS) in -fno-exceptions mode and the guest
+# driver aborts (rc=134) inside PrintStackTraceOnErrorSignal
+# (Signals.inc ManagedStatic<sys::SmartMutex<true>> Lock). Ring-3 payloads
+# have no threads (no clone syscall; pthread_create stays ENOSYS), so no-op
+# mutexes are indistinguishable from real ones here — same precedent as the
+# lane's pread shim ("matching single-process SimpleOS semantics").
+# pthread_create/join/detach and the attr/cond families keep their ENOSYS.
+cp "$LIBC_DIR/simpleos_pthread.c" "$LIBC_BUILD/simpleos_pthread.c"
+sed -i -e '/^int pthread_mutex_init/,/^}/ s/return ENOSYS;/return 0;/' \
+       -e 's/return mutex ? ENOSYS : EINVAL;/return mutex ? 0 : EINVAL;/' \
+    "$LIBC_BUILD/simpleos_pthread.c"
+grep -q 'return mutex ? 0 : EINVAL;' "$LIBC_BUILD/simpleos_pthread.c" \
+    || { echo "[sysroot-aarch64] ERROR: pthread mutex guest patch did not apply"; exit 1; }
+# RECORDED adaptation: guest fstat on stdio. The arm64 user-svc table has no
+# id-34 stat, so libc fstat(0/1/2) returns ENOSYS; llvm's
+# Process::FixupStandardFileDescriptors (driver.cpp, before ANY output) reads
+# errno != EBADF as a hard error and clang_main returns 1 — the guest driver
+# exited rc=1 with zero output. The kernel seeds fds 0/1/2 as serial by
+# construction (_fd_seed_stdio), so succeed locally for stdio only; fds > 2
+# keep the real syscall (cc1/lld file paths are unaffected).
+cp "$LIBC_DIR/simpleos_fs.c" "$LIBC_BUILD/simpleos_fs.c"
+sed -i '/^int fstat(int fd, struct stat \*buf) {/a\    if (fd >= 0 \&\& fd <= 2) { memset(buf, 0, sizeof(*buf)); return 0; }' \
+    "$LIBC_BUILD/simpleos_fs.c"
+grep -q 'if (fd >= 0 && fd <= 2) { memset(buf, 0, sizeof(\*buf)); return 0; }' \
+    "$LIBC_BUILD/simpleos_fs.c" \
+    || { echo "[sysroot-aarch64] ERROR: fstat stdio guest patch did not apply"; exit 1; }
 for src in \
     simpleos_libc.c simpleos_math.c simpleos_math_ext.c simpleos_fs.c \
     simpleos_pthread.c simpleos_alloc.c simpleos_process.c \
@@ -47,37 +93,37 @@ for src in \
     simpleos_socket.c simpleos_filelock.c simpleos_statvfs.c \
     simpleos_utsname.c
 do
-    "$CC" $CFLAGS -c "$LIBC_DIR/$src" -o "$LIBC_BUILD/${src%.c}.o"
+    src_path="$LIBC_DIR/$src"
+    extra_inc=""
+    if [ "$src" = "simpleos_pthread.c" ]; then
+        src_path="$LIBC_BUILD/simpleos_pthread.c"
+        extra_inc="-I$LIBC_DIR"  # patched copy keeps the repo's "include/..." quoted includes
+    fi
+    if [ "$src" = "simpleos_fs.c" ]; then
+        src_path="$LIBC_BUILD/simpleos_fs.c"
+        extra_inc="-I$LIBC_DIR"
+    fi
+    "$CC" $CFLAGS $extra_inc -c "$src_path" -o "$LIBC_BUILD/${src%.c}.o"
 done
 
-cat > "$LIBC_BUILD/simpleos_crt0_aarch64.S" << 'ASMEOF'
-.section .text
-.global _start
-.type _start, %function
-_start:
-    adrp x0, __bss_start
-    add  x0, x0, :lo12:__bss_start
-    adrp x1, __bss_end
-    add  x1, x1, :lo12:__bss_end
-    cmp  x0, x1
-    b.hs 1f
-0:
-    strb wzr, [x0], #1
-    cmp  x0, x1
-    b.lo 0b
-1:
-    bl __libc_init_array
-    mov x0, #0
-    mov x1, #0
-    mov x2, #0
-    bl main
-    bl exit
-2:
-    b 2b
-.size _start, . - _start
-.weak __bss_start
-.weak __bss_end
-ASMEOF
+# crt0: the repo's current simpleos_crt0_aarch64.S is the source of truth.
+# It reads the SysV process-entry stack frame the kernel builds
+# (sp[0]=argc, sp[1..]=argv, then envp; falls back to 0/NULL for early
+# kernels), zeroes BSS, publishes environ/argc/argv, runs
+# __libc_init_array, then calls main(argc, argv, envp) and exit(ret).
+# The previous heredoc predated that source and called main(0, 0, 0)
+# (bug: guest_aarch64_clang_lld_mislinked_crt0_main_pread_wall10_2026-09-26).
+cp "$LIBC_DIR/simpleos_crt0_aarch64.S" "$LIBC_BUILD/simpleos_crt0_aarch64.S"
+# RECORDED adaptation: the repo aarch64 crt0 still carries the pre-fix
+# `.globl environ` definition, which ld.lld rejects as a duplicate symbol
+# against libc's strong `char **environ = _env_storage;`
+# (simpleos_process.c) — the exact collision the x86_64 crt0
+# (src/os/libc/simpleos_crt0.S, "History, both directions of this trap")
+# already resolved with `.weak environ`. Mirror that resolution here until
+# the repo source catches up; do not promote back to .globl.
+sed -i 's/^    \.globl environ$/    .weak environ/' "$LIBC_BUILD/simpleos_crt0_aarch64.S"
+grep -q '^    \.weak environ$' "$LIBC_BUILD/simpleos_crt0_aarch64.S" \
+    || { echo "[sysroot-aarch64] ERROR: crt0 environ weakification did not apply"; exit 1; }
 cat > "$LIBC_BUILD/simpleos_syscall_aarch64.S" << 'ASMEOF'
 .section .text
 .global simpleos_syscall
@@ -271,12 +317,19 @@ SHIMSRC="$WORK/libc-build-x86_64/posix_shims.c"
 "$AR" r "$SYSROOT/lib/libsimpleos_c.a" "$LIBC_BUILD/libcxx_compat.o"
 
 cat > "$LIBC_BUILD/main_shim.S" << 'EOF'
-/* lane-C1 aarch64: freestanding C++ emits _Z4mainv; crt0.o branches to C main. */
-    .weak _Z4mainv
+/* lane-C1 aarch64: freestanding C++ driver code emits main(int, char**)
+   (_Z4mainiPPc — clang/lld driver.cpp); crt0.o calls plain C main with
+   x0=argc, x1=argv. The tail branch forwards argc/argv unchanged. The
+   previous shim targeted _Z4mainv, which no aarch64 driver object defines;
+   lld resolves a branch to an undefined weak symbol as a fallthrough, so
+   `main` fell straight into the next archive member (pread) and the real
+   driver main never ran (bug doc 2026-09-26, defect 2). C programs with a
+   strong main override this weak shim as before. */
+    .weak _Z4mainiPPc
     .weak main
     .type main, %function
 main:
-    b _Z4mainv
+    b _Z4mainiPPc
     .size main, .-main
 EOF
 "$CC" --target=$TRIPLE -ffreestanding -nostdlib -c "$LIBC_BUILD/main_shim.S" -o "$LIBC_BUILD/main_shim.o"
@@ -305,6 +358,18 @@ SECTIONS {
     .data : {
         *(.data .data.*)
         *(.sdata .sdata.*)
+    }
+
+    /* The AArch64 psABI routes references to weak data symbols through GOT
+     * slots even in -fno-pic -static links, and -Wl,--export-dynamic blocks
+     * lld's GOT->direct relaxation. Discarding .got left lld's synthetic GOT
+     * allocated as an unmapped orphan (page 0xb) with dangling absolute
+     * references from __libc_init_array (bug doc 2026-09-26, defect 3:
+     * FAR=0xb1c8 translation fault at EL0). The slots are link-time
+     * constants here, so map them like ordinary .data. */
+    . = ALIGN(16);
+    .got : {
+        *(.got .got.*)
     }
 
     . = ALIGN(16);
@@ -349,8 +414,6 @@ SECTIONS {
         *(.note .note.*)
         *(.eh_frame)
         *(.eh_frame_hdr)
-        *(.got)
-        *(.got.plt)
         *(.plt)
         *(.rela.plt)
     }
