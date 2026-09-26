@@ -65,22 +65,14 @@ sed -i -e '/^int pthread_mutex_init/,/^}/ s/return ENOSYS;/return 0;/' \
     "$LIBC_BUILD/simpleos_pthread.c"
 grep -q 'return mutex ? 0 : EINVAL;' "$LIBC_BUILD/simpleos_pthread.c" \
     || { echo "[sysroot-aarch64] ERROR: pthread mutex guest patch did not apply"; exit 1; }
-# RECORDED adaptation: guest fstat. The arm64 user-svc table has no id-34
-# stat, so every fstat returns ENOSYS and llvm hard-fails:
-# Process::FixupStandardFileDescriptors (driver.cpp, before ANY output)
-# reads errno != EBADF as fatal (guest driver exited rc=1 silently), and
-# MemoryBuffer::getOpenFileImpl errors out ("error reading '<path>':
-# Function not implemented"). Succeed locally with a zeroed stat instead:
-# st_mode=0 is not regular_file, so LLVM takes
-# getMemoryBufferForStream (reads to EOF — size-independent, always
-# correct for the FAT32-backed fds). stdio fds are seeded serial by the
-# kernel (_fd_seed_stdio) and stream the same way.
+# fstat: NO guest patch — the repo's real syscall fstat (a3=1 fd-mode) is
+# the source of truth. The arm64 kernel's id-34 handler answers fd-mode
+# from its fd table (S_IFREG + real size; stdio fds 0/1/2 zeroed). The
+# previous zeroed-stub patch here was the R5b root cause: clang's
+# MemoryBuffer::getOpenFile trusts st_size=0, so the guest cc1 compiled an
+# empty translation unit (no read syscall at all) and the in-guest-linked
+# product lost main/printf (hollow rc=0 green).
 cp "$LIBC_DIR/simpleos_fs.c" "$LIBC_BUILD/simpleos_fs.c"
-sed -i '/^int fstat(int fd, struct stat \*buf) {/a\    memset(buf, 0, sizeof(*buf)); return 0;' \
-    "$LIBC_BUILD/simpleos_fs.c"
-grep -q 'memset(buf, 0, sizeof(\*buf)); return 0;' \
-    "$LIBC_BUILD/simpleos_fs.c" \
-    || { echo "[sysroot-aarch64] ERROR: fstat guest patch did not apply"; exit 1; }
 for src in \
     simpleos_libc.c simpleos_math.c simpleos_math_ext.c simpleos_fs.c \
     simpleos_pthread.c simpleos_alloc.c simpleos_process.c \
