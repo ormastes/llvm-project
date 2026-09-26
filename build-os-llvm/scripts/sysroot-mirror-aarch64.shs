@@ -260,35 +260,19 @@ for src in \
 do
     obj="$LIBCXX_BUILD/$(printf '%s' "$src" | tr '/.' '__').o"
     mkdir -p "$(dirname "$obj")"
-    PERFILE_FLAGS="$LIBCXX_FLAGS"
-    # 2026-09-26 lane-C1 R6: with libc++abi linked alongside (exceptions
-    # build), libc++ must NOT take the fallback EH path in exception.cpp /
-    # new_handler.cpp — the fallback terminate/unexpected/new_handler family
-    # collides strong/strong with libc++abi's cxa_handlers /
-    # cxa_default_handlers at link time. LIBCXX_BUILDING_LIBCXXABI routes
-    # them to the libcxxabi .ipp split (upstream pairing).
-    case "$src" in
-        exception.cpp|new_handler.cpp) PERFILE_FLAGS="$LIBCXX_FLAGS -DLIBCXX_BUILDING_LIBCXXABI -I$LLVM_SRC/libcxxabi/include" ;;
-    esac
-    "$CXX" $PERFILE_FLAGS -c "$LLVM_SRC/libcxx/src/$src" -o "$obj"
+    "$CXX" $LIBCXX_FLAGS -c "$LLVM_SRC/libcxx/src/$src" -o "$obj"
 done
 rm -f "$SYSROOT/lib/libc++.a"
 "$AR" rcs "$SYSROOT/lib/libc++.a" "$LIBCXX_BUILD"/*.o
 echo "[sysroot-aarch64] Installed libc++.a"
 
-# -- libc++abi (WITH exceptions, 2026-09-26 lane-C1 R6) ------------------------
-# The guest C++ witness (WITNESS.CPP) needs the exception runtime. The
-# no-exceptions build omitted cxa_exception.cpp/cxa_personality.cpp entirely
-# (no __cxa_throw / __gxx_personality_v0 anywhere in the archive). Exceptions
-# are now compiled in; cxa_personality.cpp needs -frtti (typeid on
-# std::bad_exception), same per-file exception as private_typeinfo.cpp.
-echo "[sysroot-aarch64] Building libc++abi.a (exceptions) for $TRIPLE..."
+# -- libc++abi (no-exceptions) ------------------------------------------------
+echo "[sysroot-aarch64] Building libc++abi.a (no-exceptions) for $TRIPLE..."
 mkdir -p "$LIBCXXABI_BUILD"
-LIBCXXABI_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -std=c++23 -ffreestanding -nostdlib -nostdinc++ -fno-rtti -fvisibility=hidden -fvisibility-inlines-hidden -fstrict-aliasing -fsigned-char -D__simpleos__=1 -D_LIBCPP_BUILDING_LIBRARY -DHAVE___CXA_THREAD_ATEXIT_IMPL=0 -I$LLVM_SRC/libcxxabi/include -I$LLVM_SRC/libcxxabi/src -I$LLVM_SRC/libcxx/src -isystem $SYSROOT/include/c++/v1 -isystem $SYSROOT/include"
+LIBCXXABI_FLAGS="--target=$TRIPLE --sysroot=$SYSROOT -std=c++23 -ffreestanding -nostdlib -nostdinc++ -fno-exceptions -fno-rtti -fvisibility=hidden -fvisibility-inlines-hidden -fstrict-aliasing -fsigned-char -D__simpleos__=1 -D_LIBCPP_BUILDING_LIBRARY -DHAVE___CXA_THREAD_ATEXIT_IMPL=0 -I$LLVM_SRC/libcxxabi/include -I$LLVM_SRC/libcxxabi/src -I$LLVM_SRC/libcxx/src -isystem $SYSROOT/include/c++/v1 -isystem $SYSROOT/include"
 for src in \
     cxa_aux_runtime.cpp cxa_default_handlers.cpp cxa_demangle.cpp \
-    cxa_exception.cpp cxa_exception_storage.cpp cxa_guard.cpp cxa_handlers.cpp \
-    cxa_personality.cpp \
+    cxa_exception_storage.cpp cxa_guard.cpp cxa_handlers.cpp \
     cxa_vector.cpp cxa_virtual.cpp cxa_noexception.cpp \
     stdlib_exception.cpp stdlib_stdexcept.cpp stdlib_typeinfo.cpp \
     abort_message.cpp fallback_malloc.cpp private_typeinfo.cpp
@@ -296,7 +280,7 @@ do
     obj="$LIBCXXABI_BUILD/$(printf '%s' "$src" | tr '/.' '__').o"
     PERFILE_FLAGS="$LIBCXXABI_FLAGS"
     case "$src" in
-        private_typeinfo.cpp|cxa_personality.cpp) PERFILE_FLAGS="$(printf '%s' "$LIBCXXABI_FLAGS" | sed 's/-fno-rtti/-frtti/')" ;;
+        private_typeinfo.cpp) PERFILE_FLAGS="$(printf '%s' "$LIBCXXABI_FLAGS" | sed 's/-fno-rtti/-frtti/')" ;;
     esac
     "$CXX" $PERFILE_FLAGS -c "$LLVM_SRC/libcxxabi/src/$src" -o "$obj"
 done
