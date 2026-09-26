@@ -12,7 +12,7 @@
 #                                       $LOG_DIR/matrix-riscv64-unknown-simpleos.log
 #                                       (see row_riscv64_staged below)
 #
-# Parallelism is ALWAYS -j10: SIMPLEOS_JOBS=10 is exported for the staged
+# Parallelism: SIMPLEOS_JOBS defaults to the host core count (nproc); exported for the staged
 # scripts (ninja -j / make -j) and CMAKE_BUILD_PARALLEL_LEVEL=10 covers the
 # rest. Override with SIMPLEOS_JOBS=<n> only for debugging.
 #
@@ -28,7 +28,7 @@
 
 set -e
 
-SIMPLEOS_JOBS="${SIMPLEOS_JOBS:-10}"
+SIMPLEOS_JOBS="${SIMPLEOS_JOBS:-$(nproc)}"
 export SIMPLEOS_JOBS
 export CMAKE_BUILD_PARALLEL_LEVEL="$SIMPLEOS_JOBS"
 
